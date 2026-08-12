@@ -30,7 +30,7 @@ test("server-renders the integration cost model", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>Integration Cost Studio<\/title>/i);
-  assert.match(html, /See what integration changes/);
+  assert.doesNotMatch(html, /See what integration changes/);
   assert.match(html, /Independent baseline/);
   assert.match(html, /When the investment turns into savings/);
   assert.match(html, /Year-by-year payoff table/);

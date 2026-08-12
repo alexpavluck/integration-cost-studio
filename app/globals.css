@@ -115,17 +115,6 @@ main {
   color: var(--teal);
 }
 
-.hero {
-  width: min(1500px, calc(100% - 48px));
-  margin: 0 auto;
-  padding: 54px 0 42px;
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.55fr);
-  gap: 80px;
-  align-items: end;
-}
-
-.eyebrow,
 .step {
   margin: 0 0 10px;
   color: var(--teal);
@@ -135,25 +124,9 @@ main {
   font-weight: 800;
 }
 
-h1 {
-  max-width: 860px;
-  margin: 0;
-  font-size: clamp(44px, 6vw, 82px);
-  line-height: 0.95;
-  letter-spacing: -0.065em;
-  font-weight: 760;
-}
-
-.hero-copy {
-  margin: 0 0 3px;
-  color: #3f4a47;
-  font-size: 17px;
-  line-height: 1.55;
-}
-
 .workspace {
   width: min(1500px, calc(100% - 48px));
-  margin: 0 auto 48px;
+  margin: 32px auto 48px;
   display: grid;
   grid-template-columns: minmax(430px, 0.82fr) minmax(620px, 1.18fr);
   align-items: start;
@@ -1154,24 +1127,9 @@ summary:focus-visible {
 
 @media (max-width: 760px) {
   .topbar,
-  .hero,
   .workspace,
   footer {
     width: min(100% - 28px, 1500px);
-  }
-
-  .hero {
-    grid-template-columns: 1fr;
-    gap: 22px;
-    padding: 38px 0 28px;
-  }
-
-  h1 {
-    font-size: clamp(42px, 14vw, 66px);
-  }
-
-  .hero-copy {
-    font-size: 15px;
   }
 
   .controls,

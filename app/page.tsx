@@ -377,18 +377,6 @@ export default function Home() {
         </button>
       </header>
 
-      <section className="hero">
-        <div>
-          <p className="eyebrow">From separate delivery to shared capability</p>
-          <h1>See what integration changes—before committing.</h1>
-        </div>
-        <p className="hero-copy">
-          Assign a cost to every delivery dimension, choose what can be shared,
-          and tune the assumptions. The model redraws the system and the economics
-          in real time.
-        </p>
-      </section>
-
       <section className="workspace">
         <aside className="controls" aria-label="Scenario controls">
           <div className="panel-heading">
