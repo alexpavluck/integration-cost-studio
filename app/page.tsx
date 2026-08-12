@@ -1,15 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
-
-type IntegrationMode = "independent" | "coordinated" | "integrated";
-
-type Dimension = {
-  id: number;
-  name: string;
-  cost: number;
-  mode: IntegrationMode;
-};
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  buildCostTimeline,
+  calculateScenario,
+  costForDimension,
+  type Dimension,
+  type IntegrationMode,
+  type ScenarioResults,
+  type TimelinePoint,
+} from "../lib/cost-model";
 
 const dimensionLibrary = [
   "Planning",
@@ -27,16 +27,28 @@ const dimensionLibrary = [
 ];
 
 const starterDimensions: Dimension[] = [
-  { id: 1, name: "Planning", cost: 180, mode: "coordinated" },
-  { id: 2, name: "Logistics", cost: 240, mode: "integrated" },
-  { id: 3, name: "Training", cost: 150, mode: "integrated" },
-  { id: 4, name: "Transportation", cost: 210, mode: "coordinated" },
-  { id: 5, name: "Implementation", cost: 320, mode: "independent" },
-  { id: 6, name: "Post-implementation", cost: 140, mode: "coordinated" },
-  { id: 7, name: "Reporting", cost: 120, mode: "integrated" },
-  { id: 8, name: "Financial management", cost: 110, mode: "independent" },
-  { id: 9, name: "Technical assistance", cost: 190, mode: "integrated" },
+  { id: 1, name: "Planning", cost: 180, upfrontCost: 70, mode: "coordinated" },
+  { id: 2, name: "Logistics", cost: 240, upfrontCost: 180, mode: "integrated" },
+  { id: 3, name: "Training", cost: 150, upfrontCost: 120, mode: "integrated" },
+  { id: 4, name: "Transportation", cost: 210, upfrontCost: 90, mode: "coordinated" },
+  { id: 5, name: "Implementation", cost: 320, upfrontCost: 0, mode: "independent" },
+  { id: 6, name: "Post-implementation", cost: 140, upfrontCost: 50, mode: "coordinated" },
+  { id: 7, name: "Reporting", cost: 120, upfrontCost: 80, mode: "integrated" },
+  { id: 8, name: "Financial management", cost: 110, upfrontCost: 0, mode: "independent" },
+  { id: 9, name: "Technical assistance", cost: 190, upfrontCost: 160, mode: "integrated" },
 ];
+
+const initialDimensions: Dimension[] = dimensionLibrary.map((name, index) =>
+  starterDimensions[index] ?? {
+    id: index + 1,
+    name,
+    cost: 100,
+    upfrontCost: 40,
+    mode: "independent",
+  },
+);
+
+type Preset = "cautious" | "balanced" | "ambitious";
 
 const programColors = ["#9bdcf0", "#a9df91", "#c9b8ff", "#ffcb80"];
 
@@ -58,20 +70,16 @@ function pct(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
-function costForDimension(
-  dimension: Dimension,
-  programmes: number,
-  coordinationEfficiency: number,
-  integrationMultiplier: number,
-) {
-  if (dimension.mode === "independent") return dimension.cost * programmes;
-  if (dimension.mode === "coordinated") {
-    return (
-      dimension.cost *
-      (1 + (programmes - 1) * (1 - coordinationEfficiency))
-    );
-  }
-  return dimension.cost * integrationMultiplier;
+function paybackLabel(years: number | null) {
+  if (years === null) return "No payback";
+  if (years === 0) return "Immediate";
+  const months = Math.ceil(years * 12);
+  if (months < 12) return `${months} month${months === 1 ? "" : "s"}`;
+  const wholeYears = Math.floor(months / 12);
+  const remainingMonths = months % 12;
+  return remainingMonths
+    ? `${wholeYears}y ${remainingMonths}m`
+    : `${wholeYears} year${wholeYears === 1 ? "" : "s"}`;
 }
 
 function Metric({
@@ -100,14 +108,17 @@ function CostBlock({
   maxCost,
   compact = false,
   suffix,
+  displayCost,
 }: {
   dimension: Dimension;
   color: string;
   maxCost: number;
   compact?: boolean;
   suffix?: string;
+  displayCost?: number;
 }) {
-  const relative = Math.max(0.38, Math.sqrt(dimension.cost / maxCost));
+  const blockCost = displayCost ?? dimension.cost;
+  const relative = Math.min(1, Math.max(0.38, Math.sqrt(blockCost / maxCost)));
   return (
     <div
       className={`cost-block${compact ? " compact" : ""}`}
@@ -117,63 +128,183 @@ function CostBlock({
           "--block-scale": relative,
         } as React.CSSProperties
       }
-      title={`${dimension.name}: ${money(dimension.cost)}${suffix ? ` ${suffix}` : ""}`}
+      title={`${dimension.name}: ${money(blockCost)}${suffix ? ` ${suffix}` : ""}`}
     >
       <span>{dimension.name}</span>
-      <strong>{money(dimension.cost, true)}</strong>
+      <strong>{money(blockCost, true)}</strong>
+    </div>
+  );
+}
+
+function PayoffChart({
+  timeline,
+  results,
+  horizonYears,
+}: {
+  timeline: TimelinePoint[];
+  results: ScenarioResults;
+  horizonYears: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const draw = () => {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const density = Math.max(1, window.devicePixelRatio || 1);
+      canvas.width = Math.round(width * density);
+      canvas.height = Math.round(height * density);
+      const context = canvas.getContext("2d");
+      if (!context) return;
+      context.setTransform(density, 0, 0, density, 0, 0);
+      context.clearRect(0, 0, width, height);
+
+      const padding = { top: 25, right: 24, bottom: 38, left: 68 };
+      const chartWidth = width - padding.left - padding.right;
+      const chartHeight = height - padding.top - padding.bottom;
+      const maxCost = Math.max(
+        ...timeline.flatMap((point) => [point.baseline, point.scenario]),
+        1,
+      );
+      const yMax = maxCost * 1.08;
+      const x = (year: number) =>
+        padding.left + (year / horizonYears) * chartWidth;
+      const y = (cost: number) =>
+        padding.top + chartHeight - (cost / yMax) * chartHeight;
+
+      context.font = "10px Arial, sans-serif";
+      context.fillStyle = "#65706d";
+      context.strokeStyle = "#d8d8cf";
+      context.lineWidth = 1;
+      for (let index = 0; index <= 4; index += 1) {
+        const value = (yMax / 4) * index;
+        const yPosition = y(value);
+        context.beginPath();
+        context.moveTo(padding.left, yPosition);
+        context.lineTo(width - padding.right, yPosition);
+        context.stroke();
+        context.textAlign = "right";
+        context.textBaseline = "middle";
+        context.fillText(money(value, true), padding.left - 9, yPosition);
+      }
+
+      const tickStep = horizonYears > 6 ? 2 : 1;
+      for (let year = 0; year <= horizonYears; year += tickStep) {
+        context.textAlign = "center";
+        context.textBaseline = "top";
+        context.fillText(
+          year === 0 ? "Start" : `Year ${year}`,
+          x(year),
+          height - padding.bottom + 12,
+        );
+      }
+
+      const drawLine = (
+        getValue: (point: TimelinePoint) => number,
+        color: string,
+      ) => {
+        context.beginPath();
+        timeline.forEach((point, index) => {
+          const xPosition = x(point.year);
+          const yPosition = y(getValue(point));
+          if (index === 0) context.moveTo(xPosition, yPosition);
+          else context.lineTo(xPosition, yPosition);
+        });
+        context.strokeStyle = color;
+        context.lineWidth = 3;
+        context.lineJoin = "round";
+        context.lineCap = "round";
+        context.stroke();
+      };
+
+      drawLine((point) => point.baseline, "#24657a");
+      drawLine((point) => point.scenario, "#b97000");
+
+      if (
+        results.paybackYears !== null &&
+        results.paybackYears <= horizonYears
+      ) {
+        const paybackX = x(results.paybackYears);
+        const paybackY = y(results.baseline * results.paybackYears);
+        context.setLineDash([4, 4]);
+        context.strokeStyle = "#096c67";
+        context.lineWidth = 1.5;
+        context.beginPath();
+        context.moveTo(paybackX, padding.top);
+        context.lineTo(paybackX, padding.top + chartHeight);
+        context.stroke();
+        context.setLineDash([]);
+        context.fillStyle = "#096c67";
+        context.beginPath();
+        context.arc(paybackX, paybackY, 5, 0, Math.PI * 2);
+        context.fill();
+        context.font = "700 10px Arial, sans-serif";
+        context.textAlign =
+          results.paybackYears > horizonYears * 0.72 ? "right" : "left";
+        context.textBaseline = "bottom";
+        context.fillText(
+          `Payback · ${paybackLabel(results.paybackYears)}`,
+          paybackX +
+            (results.paybackYears > horizonYears * 0.72 ? -8 : 8),
+          paybackY - 8,
+        );
+      }
+    };
+
+    draw();
+    const observer = new ResizeObserver(draw);
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, [horizonYears, results, timeline]);
+
+  return (
+    <div className="payoff-chart">
+      <div className="chart-legend" aria-hidden="true">
+        <span><i className="baseline-line" />Independent baseline</span>
+        <span><i className="scenario-line" />Integrated scenario</span>
+      </div>
+      <canvas
+        aria-label={`Cumulative cost chart over ${horizonYears} years. Independent baseline and integrated scenario break even ${paybackLabel(results.paybackYears)} after investment.`}
+        ref={canvasRef}
+        role="img"
+      />
     </div>
   );
 }
 
 export default function Home() {
-  const [dimensions, setDimensions] = useState<Dimension[]>(starterDimensions);
+  const [allDimensions, setAllDimensions] = useState<Dimension[]>(initialDimensions);
+  const [dimensionCount, setDimensionCount] = useState(starterDimensions.length);
   const [programmeCount, setProgrammeCount] = useState(2);
   const [coordinationEfficiency, setCoordinationEfficiency] = useState(0.28);
   const [integrationMultiplier, setIntegrationMultiplier] = useState(1.22);
-  const [transitionRate, setTransitionRate] = useState(0.12);
+  const [horizonYears, setHorizonYears] = useState(5);
+  const [activePreset, setActivePreset] = useState<Preset | "custom">("balanced");
 
-  const results = useMemo(() => {
-    const baseline = dimensions.reduce(
-      (sum, dimension) => sum + dimension.cost * programmeCount,
-      0,
-    );
-    const steadyState = dimensions.reduce(
-      (sum, dimension) =>
-        sum +
-        costForDimension(
-          dimension,
-          programmeCount,
-          coordinationEfficiency,
-          integrationMultiplier,
-        ),
-      0,
-    );
-    const transition = dimensions.reduce((sum, dimension) => {
-      if (dimension.mode === "integrated") {
-        return sum + dimension.cost * transitionRate;
-      }
-      if (dimension.mode === "coordinated") {
-        return sum + dimension.cost * transitionRate * 0.5;
-      }
-      return sum;
-    }, 0);
-    const savings = baseline - steadyState;
-    const firstYearSavings = savings - transition;
-    return {
-      baseline,
-      steadyState,
-      transition,
-      savings,
-      firstYearSavings,
-      savingsRate: baseline ? savings / baseline : 0,
-    };
-  }, [
-    dimensions,
-    programmeCount,
-    coordinationEfficiency,
-    integrationMultiplier,
-    transitionRate,
-  ]);
+  const dimensions = allDimensions.slice(0, dimensionCount);
+
+  const results = useMemo(
+    () =>
+      calculateScenario(
+        dimensions,
+        programmeCount,
+        coordinationEfficiency,
+        integrationMultiplier,
+      ),
+    [
+      dimensions,
+      programmeCount,
+      coordinationEfficiency,
+      integrationMultiplier,
+    ],
+  );
+  const timeline = useMemo(
+    () => buildCostTimeline(results, horizonYears),
+    [horizonYears, results],
+  );
 
   const maxCost = Math.max(...dimensions.map((dimension) => dimension.cost), 1);
   const independent = dimensions.filter((item) => item.mode === "independent");
@@ -181,36 +312,26 @@ export default function Home() {
   const integrated = dimensions.filter((item) => item.mode === "integrated");
 
   const resizeDimensions = (nextCount: number) => {
-    setDimensions((current) => {
-      if (nextCount <= current.length) return current.slice(0, nextCount);
-      const additions = Array.from({ length: nextCount - current.length }, (_, index) => {
-        const id = current.length + index + 1;
-        return {
-          id,
-          name: dimensionLibrary[id - 1] ?? `Dimension ${id}`,
-          cost: 100,
-          mode: "independent" as IntegrationMode,
-        };
-      });
-      return [...current, ...additions];
-    });
+    setDimensionCount(nextCount);
+    setActivePreset("custom");
   };
 
   const updateDimension = (id: number, patch: Partial<Dimension>) => {
-    setDimensions((current) =>
+    setAllDimensions((current) =>
       current.map((dimension) =>
         dimension.id === id ? { ...dimension, ...patch } : dimension,
       ),
     );
+    setActivePreset("custom");
   };
 
-  const applyPreset = (preset: "cautious" | "balanced" | "ambitious") => {
-    const modes: Record<typeof preset, IntegrationMode[]> = {
+  const applyPreset = (preset: Preset) => {
+    const modes: Record<Preset, IntegrationMode[]> = {
       cautious: ["independent", "independent", "coordinated"],
       balanced: ["coordinated", "integrated", "independent", "integrated"],
       ambitious: ["integrated", "integrated", "coordinated"],
     };
-    setDimensions((current) =>
+    setAllDimensions((current) =>
       current.map((dimension, index) => ({
         ...dimension,
         mode: modes[preset][index % modes[preset].length],
@@ -219,24 +340,24 @@ export default function Home() {
     if (preset === "cautious") {
       setCoordinationEfficiency(0.18);
       setIntegrationMultiplier(1.35);
-      setTransitionRate(0.16);
     } else if (preset === "balanced") {
       setCoordinationEfficiency(0.28);
       setIntegrationMultiplier(1.22);
-      setTransitionRate(0.12);
     } else {
       setCoordinationEfficiency(0.4);
       setIntegrationMultiplier(1.1);
-      setTransitionRate(0.08);
     }
+    setActivePreset(preset);
   };
 
   const reset = () => {
-    setDimensions(starterDimensions);
+    setAllDimensions(initialDimensions);
+    setDimensionCount(starterDimensions.length);
     setProgrammeCount(2);
     setCoordinationEfficiency(0.28);
     setIntegrationMultiplier(1.22);
-    setTransitionRate(0.12);
+    setHorizonYears(5);
+    setActivePreset("balanced");
   };
 
   return (
@@ -287,7 +408,7 @@ export default function Home() {
                 type="range"
                 min="3"
                 max="12"
-                value={dimensions.length}
+                value={dimensionCount}
                 onChange={(event) => resizeDimensions(Number(event.target.value))}
               />
               <small>How many cost components are in scope</small>
@@ -310,13 +431,21 @@ export default function Home() {
 
           <div className="preset-row" aria-label="Scenario presets">
             <span>Starting point</span>
-            <button type="button" onClick={() => applyPreset("cautious")}>Cautious</button>
-            <button className="active" type="button" onClick={() => applyPreset("balanced")}>Balanced</button>
-            <button type="button" onClick={() => applyPreset("ambitious")}>Ambitious</button>
+            {(["cautious", "balanced", "ambitious"] as Preset[]).map((preset) => (
+              <button
+                aria-pressed={activePreset === preset}
+                className={activePreset === preset ? "active" : ""}
+                key={preset}
+                type="button"
+                onClick={() => applyPreset(preset)}
+              >
+                {preset[0].toUpperCase() + preset.slice(1)}
+              </button>
+            ))}
           </div>
 
           <div className="dimension-header">
-            <span>Dimension & cost</span>
+            <span>Dimension · annual · upfront</span>
             <span>Integration choice</span>
           </div>
 
@@ -336,7 +465,7 @@ export default function Home() {
                   <label className="cost-input">
                     <span>$</span>
                     <input
-                      aria-label={`Cost for ${dimension.name} in thousands`}
+                      aria-label={`Annual cost for ${dimension.name} in thousands`}
                       min="0"
                       step="10"
                       type="number"
@@ -347,12 +476,29 @@ export default function Home() {
                         })
                       }
                     />
-                    <span>k</span>
+                    <span>k/yr</span>
+                  </label>
+                  <label className="cost-input upfront-input">
+                    <span>$</span>
+                    <input
+                      aria-label={`Upfront investment for ${dimension.name} in thousands`}
+                      min="0"
+                      step="10"
+                      type="number"
+                      value={dimension.upfrontCost}
+                      onChange={(event) =>
+                        updateDimension(dimension.id, {
+                          upfrontCost: Math.max(0, Number(event.target.value)),
+                        })
+                      }
+                    />
+                    <span>k up</span>
                   </label>
                 </div>
                 <div className="mode-control" role="group" aria-label={`Integration choice for ${dimension.name}`}>
                   {(Object.keys(modeCopy) as IntegrationMode[]).map((mode) => (
                     <button
+                      aria-pressed={dimension.mode === mode}
                       className={dimension.mode === mode ? `selected ${mode}` : ""}
                       key={mode}
                       onClick={() => updateDimension(dimension.id, { mode })}
@@ -373,7 +519,7 @@ export default function Home() {
                 <span className="step">02 · Tune</span>
                 Model assumptions
               </span>
-              <small>3 levers</small>
+              <small>2 levers</small>
             </summary>
             <div className="assumption-grid">
               <label>
@@ -384,7 +530,10 @@ export default function Home() {
                   max="0.6"
                   step="0.01"
                   value={coordinationEfficiency}
-                  onChange={(event) => setCoordinationEfficiency(Number(event.target.value))}
+                  onChange={(event) => {
+                    setCoordinationEfficiency(Number(event.target.value));
+                    setActivePreset("custom");
+                  }}
                 />
                 <small>Savings on duplicated work after the first stream</small>
               </label>
@@ -396,21 +545,12 @@ export default function Home() {
                   max="1.8"
                   step="0.01"
                   value={integrationMultiplier}
-                  onChange={(event) => setIntegrationMultiplier(Number(event.target.value))}
+                  onChange={(event) => {
+                    setIntegrationMultiplier(Number(event.target.value));
+                    setActivePreset("custom");
+                  }}
                 />
                 <small>Shared capability cost vs. one stream’s original cost</small>
-              </label>
-              <label>
-                <span>Transition cost <strong>{pct(transitionRate)}</strong></span>
-                <input
-                  type="range"
-                  min="0"
-                  max="0.35"
-                  step="0.01"
-                  value={transitionRate}
-                  onChange={(event) => setTransitionRate(Number(event.target.value))}
-                />
-                <small>One-time change cost applied to shared dimensions</small>
               </label>
             </div>
           </details>
@@ -450,10 +590,105 @@ export default function Home() {
             <Metric
               label="First-year impact"
               value={`${results.firstYearSavings >= 0 ? "" : "−"}${money(Math.abs(results.firstYearSavings))}`}
-              note={`After ${money(results.transition)} transition cost`}
+              note={`After ${money(results.upfrontInvestment)} upfront investment`}
               tone={results.firstYearSavings >= 0 ? "positive" : "warning"}
             />
           </div>
+
+          <section className="payoff" aria-labelledby="payoff-title">
+            <div className="payoff-heading">
+              <div>
+                <p className="step">04 · Payoff</p>
+                <h2 id="payoff-title">When the investment turns into savings</h2>
+                <p>
+                  Cumulative delivery cost includes the upfront investment at the
+                  start, then adds each operating model’s annual run rate.
+                </p>
+              </div>
+              <label className="horizon-control">
+                <span>Time horizon <strong>{horizonYears} years</strong></span>
+                <input
+                  aria-label="Payoff chart time horizon in years"
+                  max="10"
+                  min="2"
+                  type="range"
+                  value={horizonYears}
+                  onChange={(event) => setHorizonYears(Number(event.target.value))}
+                />
+              </label>
+            </div>
+
+            <div className="payoff-summary">
+              <div>
+                <span>Upfront investment</span>
+                <strong>{money(results.upfrontInvestment)}</strong>
+                <small>Only coordinated and integrated dimensions</small>
+              </div>
+              <div className={results.paybackYears === null ? "warning" : "positive"}>
+                <span>Estimated payback</span>
+                <strong>{paybackLabel(results.paybackYears)}</strong>
+                <small>
+                  {results.paybackYears === null
+                    ? "Annual operating cost does not improve"
+                    : results.paybackYears > horizonYears
+                      ? `Beyond the current ${horizonYears}-year view`
+                      : "Point where cumulative costs are equal"}
+                </small>
+              </div>
+              <div className={timeline.at(-1)!.netSavings >= 0 ? "positive" : "warning"}>
+                <span>Net savings by year {horizonYears}</span>
+                <strong>
+                  {timeline.at(-1)!.netSavings >= 0 ? "" : "−"}
+                  {money(Math.abs(timeline.at(-1)!.netSavings))}
+                </strong>
+                <small>Baseline cost minus scenario cost</small>
+              </div>
+            </div>
+
+            <PayoffChart
+              horizonYears={horizonYears}
+              results={results}
+              timeline={timeline}
+            />
+
+            <details className="payoff-table" open>
+              <summary>Year-by-year payoff table</summary>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Point in time</th>
+                      <th scope="col">Independent baseline</th>
+                      <th scope="col">Integrated scenario</th>
+                      <th scope="col">Cumulative net savings</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {timeline.map((point) => {
+                      const isPayoffYear =
+                        results.paybackYears !== null &&
+                        results.paybackYears <= horizonYears &&
+                        point.year === Math.ceil(results.paybackYears);
+                      return (
+                        <tr className={isPayoffYear ? "payoff-row" : ""} key={point.year}>
+                          <th scope="row">
+                            {point.year === 0 ? "Start" : `End of year ${point.year}`}
+                            {isPayoffYear && <span>Payback reached</span>}
+                          </th>
+                          <td>{money(point.baseline)}</td>
+                          <td>{money(point.scenario)}</td>
+                          <td className={point.netSavings >= 0 ? "positive-value" : "negative-value"}>
+                            {point.netSavings >= 0 ? "" : "−"}
+                            {money(Math.abs(point.netSavings))}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          </section>
 
           <div className="journey">
             <div className="journey-rail" aria-hidden="true">
@@ -536,6 +771,12 @@ export default function Home() {
                     [...coordinated, ...integrated].map((dimension) => (
                       <CostBlock
                         dimension={dimension}
+                        displayCost={
+                          dimension.cost *
+                          (1 +
+                            (programmeCount - 1) *
+                              (1 - coordinationEfficiency))
+                        }
                         key={dimension.id}
                         maxCost={maxCost}
                         color="#efb8e8"
@@ -567,6 +808,12 @@ export default function Home() {
                   {integrated.map((dimension) => (
                     <CostBlock
                       dimension={dimension}
+                      displayCost={costForDimension(
+                        dimension,
+                        programmeCount,
+                        coordinationEfficiency,
+                        integrationMultiplier,
+                      )}
                       key={dimension.id}
                       maxCost={maxCost}
                       color="#ffb74d"
@@ -575,6 +822,12 @@ export default function Home() {
                   {coordinated.map((dimension) => (
                     <CostBlock
                       dimension={dimension}
+                      displayCost={costForDimension(
+                        dimension,
+                        programmeCount,
+                        coordinationEfficiency,
+                        integrationMultiplier,
+                      )}
                       key={dimension.id}
                       maxCost={maxCost}
                       color="#efb8e8"
@@ -585,23 +838,36 @@ export default function Home() {
                   <div className="retained-note">
                     <strong>{independent.length}</strong>
                     <span>dimension{independent.length === 1 ? "" : "s"} remain stream-specific</span>
+                    <small>
+                      {money(
+                        independent.reduce(
+                          (sum, dimension) =>
+                            sum + dimension.cost * programmeCount,
+                          0,
+                        ),
+                      )} retained cost
+                    </small>
                   </div>
                 )}
               </div>
             </article>
           </div>
 
-          <div className={`decision-note ${results.firstYearSavings < 0 ? "negative" : ""}`}>
-            <span className="decision-icon">{results.firstYearSavings >= 0 ? "↗" : "↘"}</span>
+          <div className={`decision-note ${results.paybackYears === null ? "negative" : ""}`}>
+            <span className="decision-icon">{results.paybackYears === null ? "↘" : "↗"}</span>
             <div>
               <strong>
-                {results.firstYearSavings >= 0
-                  ? `This scenario pays back within year one.`
-                  : `This scenario needs a longer payback horizon.`}
+                {results.paybackYears === null
+                  ? "This scenario does not recover its upfront investment."
+                  : results.paybackYears === 0
+                    ? "This scenario begins generating net savings immediately."
+                    : results.paybackYears <= 1
+                      ? "This scenario pays back within year one."
+                      : `This scenario pays back in approximately ${paybackLabel(results.paybackYears)}.`}
               </strong>
               <p>
                 {integrated.length} integrated · {coordinated.length} coordinated · {independent.length} retained.
-                {" "}Annual run-rate {results.savings >= 0 ? "improves" : "increases"} by {money(Math.abs(results.savings))}.
+                {" "}{money(results.upfrontInvestment)} upfront investment; annual run-rate {results.savings >= 0 ? "improves" : "increases"} by {money(Math.abs(results.savings))}.
               </p>
             </div>
           </div>
@@ -612,7 +878,9 @@ export default function Home() {
               Baseline cost equals each dimension’s cost multiplied by the number of streams.
               Coordination reduces only duplicated work after the first stream. Integration
               replaces all stream costs with one shared cost using the integrated-cost multiplier.
-              Transition cost is applied once to coordinated and integrated dimensions.
+              Upfront investment is entered for each dimension and counted only when that
+              dimension is coordinated or integrated. Payback is the point where cumulative
+              scenario cost falls below cumulative independent-delivery cost.
             </p>
           </details>
         </section>

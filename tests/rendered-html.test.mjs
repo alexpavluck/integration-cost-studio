@@ -32,6 +32,8 @@ test("server-renders the integration cost model", async () => {
   assert.match(html, /<title>Integration Cost Studio<\/title>/i);
   assert.match(html, /See what integration changes/);
   assert.match(html, /Independent baseline/);
+  assert.match(html, /When the investment turns into savings/);
+  assert.match(html, /Year-by-year payoff table/);
   assert.match(html, /Coordinated delivery/);
   assert.match(html, /Integrated operating model/);
   assert.match(html, /http:\/\/localhost\/og\.png/);
@@ -39,20 +41,23 @@ test("server-renders the integration cost model", async () => {
 });
 
 test("ships without disposable starter assets", async () => {
-  const [page, layout, packageJson, css] = await Promise.all([
+  const [page, layout, packageJson, css, costModel] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/cost-model.ts", import.meta.url), "utf8"),
   ]);
 
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
   await access(new URL("../public/og.png", import.meta.url));
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.doesNotMatch(page, /_sites-preview|SkeletonPreview|codex-preview/);
-  assert.match(page, /"independent" \| "coordinated" \| "integrated"/);
+  assert.match(costModel, /"independent" \| "coordinated" \| "integrated"/);
   assert.match(page, /coordinationEfficiency/);
   assert.match(page, /integrationMultiplier/);
+  assert.match(page, /upfrontCost/);
+  assert.match(page, /PayoffChart/);
   assert.match(layout, /generateMetadata/);
   assert.match(css, /@media \(max-width: 760px\)/);
   assert.match(css, /prefers-reduced-motion/);
