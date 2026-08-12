@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildCostTimeline,
   calculateScenario,
-  costForDimension,
+  verticalCostForDimension,
   type Dimension,
   type IntegrationMode,
   type ScenarioResults,
@@ -27,35 +27,33 @@ const dimensionLibrary = [
 ];
 
 const starterDimensions: Dimension[] = [
-  { id: 1, name: "Planning", cost: 180, upfrontCost: 70, mode: "coordinated" },
-  { id: 2, name: "Logistics", cost: 240, upfrontCost: 180, mode: "integrated" },
-  { id: 3, name: "Training", cost: 150, upfrontCost: 120, mode: "integrated" },
-  { id: 4, name: "Transportation", cost: 210, upfrontCost: 90, mode: "coordinated" },
-  { id: 5, name: "Implementation", cost: 320, upfrontCost: 0, mode: "independent" },
-  { id: 6, name: "Post-implementation", cost: 140, upfrontCost: 50, mode: "coordinated" },
-  { id: 7, name: "Reporting", cost: 120, upfrontCost: 80, mode: "integrated" },
-  { id: 8, name: "Financial management", cost: 110, upfrontCost: 0, mode: "independent" },
-  { id: 9, name: "Technical assistance", cost: 190, upfrontCost: 160, mode: "integrated" },
+  { id: 1, name: "Planning", programmeCosts: [180, 160, 150, 145], startupCost: 70, mergedCost: 260, mode: "merged" },
+  { id: 2, name: "Logistics", programmeCosts: [240, 220, 210, 195], startupCost: 180, mergedCost: 330, mode: "merged" },
+  { id: 3, name: "Training", programmeCosts: [150, 140, 135, 125], startupCost: 120, mergedCost: 210, mode: "merged" },
+  { id: 4, name: "Transportation", programmeCosts: [210, 190, 180, 170], startupCost: 90, mergedCost: 340, mode: "merged" },
+  { id: 5, name: "Implementation", programmeCosts: [320, 280, 260, 250], startupCost: 240, mergedCost: 500, mode: "separate" },
+  { id: 6, name: "Post-implementation", programmeCosts: [140, 130, 120, 115], startupCost: 50, mergedCost: 225, mode: "separate" },
+  { id: 7, name: "Reporting", programmeCosts: [120, 110, 105, 95], startupCost: 80, mergedCost: 175, mode: "merged" },
+  { id: 8, name: "Financial management", programmeCosts: [110, 100, 95, 90], startupCost: 70, mergedCost: 180, mode: "separate" },
+  { id: 9, name: "Technical assistance", programmeCosts: [190, 180, 170, 160], startupCost: 160, mergedCost: 290, mode: "merged" },
 ];
 
 const initialDimensions: Dimension[] = dimensionLibrary.map((name, index) =>
   starterDimensions[index] ?? {
     id: index + 1,
     name,
-    cost: 100,
-    upfrontCost: 40,
-    mode: "independent",
+    programmeCosts: [100, 90, 85, 80],
+    startupCost: 40,
+    mergedCost: 150,
+    mode: "separate",
   },
 );
-
-type Preset = "cautious" | "balanced" | "ambitious";
 
 const programColors = ["#9bdcf0", "#a9df91", "#c9b8ff", "#ffcb80"];
 
 const modeCopy: Record<IntegrationMode, { label: string; short: string }> = {
-  independent: { label: "Cannot integrate", short: "Separate" },
-  coordinated: { label: "Coordinate", short: "Coordinated" },
-  integrated: { label: "Integrate", short: "Integrated" },
+  separate: { label: "Keep vertical programmes separate", short: "Keep separate" },
+  merged: { label: "Merge into one shared service", short: "Merge service" },
 };
 
 function money(value: number, compact = false) {
@@ -107,17 +105,15 @@ function CostBlock({
   color,
   maxCost,
   compact = false,
-  suffix,
   displayCost,
 }: {
   dimension: Dimension;
   color: string;
   maxCost: number;
   compact?: boolean;
-  suffix?: string;
-  displayCost?: number;
+  displayCost: number;
 }) {
-  const blockCost = displayCost ?? dimension.cost;
+  const blockCost = displayCost;
   const relative = Math.min(1, Math.max(0.38, Math.sqrt(blockCost / maxCost)));
   return (
     <div
@@ -128,7 +124,7 @@ function CostBlock({
           "--block-scale": relative,
         } as React.CSSProperties
       }
-      title={`${dimension.name}: ${money(blockCost)}${suffix ? ` ${suffix}` : ""}`}
+      title={`${dimension.name}: ${money(blockCost)}`}
     >
       <span>{dimension.name}</span>
       <strong>{money(blockCost, true)}</strong>
@@ -263,11 +259,11 @@ function PayoffChart({
   return (
     <div className="payoff-chart">
       <div className="chart-legend" aria-hidden="true">
-        <span><i className="baseline-line" />Independent baseline</span>
-        <span><i className="scenario-line" />Integrated scenario</span>
+        <span><i className="baseline-line" />Current vertical programmes</span>
+        <span><i className="scenario-line" />Proposed operating model</span>
       </div>
       <canvas
-        aria-label={`Cumulative cost chart over ${horizonYears} years. Independent baseline and integrated scenario break even ${paybackLabel(results.paybackYears)} after investment.`}
+        aria-label={`Cumulative cost chart over ${horizonYears} years. Current vertical programmes and the proposed operating model break even ${paybackLabel(results.paybackYears)} after startup investment.`}
         ref={canvasRef}
         role="img"
       />
@@ -279,41 +275,32 @@ export default function Home() {
   const [allDimensions, setAllDimensions] = useState<Dimension[]>(initialDimensions);
   const [dimensionCount, setDimensionCount] = useState(starterDimensions.length);
   const [programmeCount, setProgrammeCount] = useState(2);
-  const [coordinationEfficiency, setCoordinationEfficiency] = useState(0.28);
-  const [integrationMultiplier, setIntegrationMultiplier] = useState(1.22);
   const [horizonYears, setHorizonYears] = useState(5);
-  const [activePreset, setActivePreset] = useState<Preset | "custom">("balanced");
 
   const dimensions = allDimensions.slice(0, dimensionCount);
 
   const results = useMemo(
-    () =>
-      calculateScenario(
-        dimensions,
-        programmeCount,
-        coordinationEfficiency,
-        integrationMultiplier,
-      ),
-    [
-      dimensions,
-      programmeCount,
-      coordinationEfficiency,
-      integrationMultiplier,
-    ],
+    () => calculateScenario(dimensions, programmeCount),
+    [dimensions, programmeCount],
   );
   const timeline = useMemo(
     () => buildCostTimeline(results, horizonYears),
     [horizonYears, results],
   );
 
-  const maxCost = Math.max(...dimensions.map((dimension) => dimension.cost), 1);
-  const independent = dimensions.filter((item) => item.mode === "independent");
-  const coordinated = dimensions.filter((item) => item.mode === "coordinated");
-  const integrated = dimensions.filter((item) => item.mode === "integrated");
+  const annualTimeline = timeline.filter((point) => Number.isInteger(point.year));
+  const maxCost = Math.max(
+    ...dimensions.flatMap((dimension) => [
+      ...dimension.programmeCosts.slice(0, programmeCount),
+      dimension.mergedCost,
+    ]),
+    1,
+  );
+  const separate = dimensions.filter((item) => item.mode === "separate");
+  const merged = dimensions.filter((item) => item.mode === "merged");
 
   const resizeDimensions = (nextCount: number) => {
     setDimensionCount(nextCount);
-    setActivePreset("custom");
   };
 
   const updateDimension = (id: number, patch: Partial<Dimension>) => {
@@ -322,42 +309,28 @@ export default function Home() {
         dimension.id === id ? { ...dimension, ...patch } : dimension,
       ),
     );
-    setActivePreset("custom");
   };
 
-  const applyPreset = (preset: Preset) => {
-    const modes: Record<Preset, IntegrationMode[]> = {
-      cautious: ["independent", "independent", "coordinated"],
-      balanced: ["coordinated", "integrated", "independent", "integrated"],
-      ambitious: ["integrated", "integrated", "coordinated"],
-    };
+  const updateProgrammeCost = (
+    id: number,
+    programmeIndex: number,
+    value: number,
+  ) => {
     setAllDimensions((current) =>
-      current.map((dimension, index) => ({
-        ...dimension,
-        mode: modes[preset][index % modes[preset].length],
-      })),
+      current.map((dimension) => {
+        if (dimension.id !== id) return dimension;
+        const programmeCosts = [...dimension.programmeCosts];
+        programmeCosts[programmeIndex] = Math.max(0, value);
+        return { ...dimension, programmeCosts };
+      }),
     );
-    if (preset === "cautious") {
-      setCoordinationEfficiency(0.18);
-      setIntegrationMultiplier(1.35);
-    } else if (preset === "balanced") {
-      setCoordinationEfficiency(0.28);
-      setIntegrationMultiplier(1.22);
-    } else {
-      setCoordinationEfficiency(0.4);
-      setIntegrationMultiplier(1.1);
-    }
-    setActivePreset(preset);
   };
 
   const reset = () => {
     setAllDimensions(initialDimensions);
     setDimensionCount(starterDimensions.length);
     setProgrammeCount(2);
-    setCoordinationEfficiency(0.28);
-    setIntegrationMultiplier(1.22);
     setHorizonYears(5);
-    setActivePreset("balanced");
   };
 
   return (
@@ -389,7 +362,7 @@ export default function Home() {
 
           <div className="control-pair">
             <label className="field">
-              <span>Cost dimensions</span>
+              <span>Service attributes</span>
               <strong>{dimensions.length}</strong>
               <input
                 aria-label="Number of cost dimensions"
@@ -399,11 +372,11 @@ export default function Home() {
                 value={dimensionCount}
                 onChange={(event) => resizeDimensions(Number(event.target.value))}
               />
-              <small>How many cost components are in scope</small>
+              <small>Functions that could stay vertical or be merged</small>
             </label>
 
             <label className="field">
-              <span>Delivery streams</span>
+              <span>Vertical programmes</span>
               <strong>{programmeCount}</strong>
               <input
                 aria-label="Number of delivery streams"
@@ -413,77 +386,37 @@ export default function Home() {
                 value={programmeCount}
                 onChange={(event) => setProgrammeCount(Number(event.target.value))}
               />
-              <small>Programmes, products, or teams being combined</small>
+              <small>Existing programmes with their own annual costs</small>
             </label>
           </div>
 
-          <div className="preset-row" aria-label="Scenario presets">
-            <span>Starting point</span>
-            {(["cautious", "balanced", "ambitious"] as Preset[]).map((preset) => (
-              <button
-                aria-pressed={activePreset === preset}
-                className={activePreset === preset ? "active" : ""}
-                key={preset}
-                type="button"
-                onClick={() => applyPreset(preset)}
-              >
-                {preset[0].toUpperCase() + preset.slice(1)}
-              </button>
-            ))}
+          <div className="cost-guide" aria-label="Cost model structure">
+            <div><strong>1</strong><span>Current programme costs<small>Annual cost for each vertical</small></span></div>
+            <i aria-hidden="true">+</i>
+            <div><strong>2</strong><span>Merge startup cost<small>One-time implementation investment</small></span></div>
+            <i aria-hidden="true">→</i>
+            <div><strong>3</strong><span>Merged service cost<small>New annual run rate after merging</small></span></div>
           </div>
 
           <div className="dimension-header">
-            <span>Dimension · annual · upfront</span>
-            <span>Integration choice</span>
+            <span>Attribute and costs</span>
+            <span>Operating choice</span>
           </div>
 
           <div className="dimension-list">
             {dimensions.map((dimension, index) => (
               <div className="dimension-row" key={dimension.id}>
                 <span className="dimension-number">{String(index + 1).padStart(2, "0")}</span>
-                <div className="dimension-inputs">
-                  <input
-                    aria-label={`Name for dimension ${index + 1}`}
-                    type="text"
-                    value={dimension.name}
-                    onChange={(event) =>
-                      updateDimension(dimension.id, { name: event.target.value })
-                    }
-                  />
-                  <label className="cost-input">
-                    <span>$</span>
-                    <input
-                      aria-label={`Annual cost for ${dimension.name} in thousands`}
-                      min="0"
-                      step="10"
-                      type="number"
-                      value={dimension.cost}
-                      onChange={(event) =>
-                        updateDimension(dimension.id, {
-                          cost: Math.max(0, Number(event.target.value)),
-                        })
-                      }
-                    />
-                    <span>k/yr</span>
-                  </label>
-                  <label className="cost-input upfront-input">
-                    <span>$</span>
-                    <input
-                      aria-label={`Upfront investment for ${dimension.name} in thousands`}
-                      min="0"
-                      step="10"
-                      type="number"
-                      value={dimension.upfrontCost}
-                      onChange={(event) =>
-                        updateDimension(dimension.id, {
-                          upfrontCost: Math.max(0, Number(event.target.value)),
-                        })
-                      }
-                    />
-                    <span>k up</span>
-                  </label>
-                </div>
-                <div className="mode-control" role="group" aria-label={`Integration choice for ${dimension.name}`}>
+                <input
+                  className="dimension-name"
+                  aria-label={`Name for attribute ${index + 1}`}
+                  type="text"
+                  value={dimension.name}
+                  onChange={(event) =>
+                    updateDimension(dimension.id, { name: event.target.value })
+                  }
+                />
+                <div className="mode-control" role="group" aria-label={`Operating choice for ${dimension.name}`}>
                   {(Object.keys(modeCopy) as IntegrationMode[]).map((mode) => (
                     <button
                       aria-pressed={dimension.mode === mode}
@@ -493,78 +426,97 @@ export default function Home() {
                       title={modeCopy[mode].label}
                       type="button"
                     >
-                      {mode === "independent" ? "No" : mode === "coordinated" ? "Coord." : "Yes"}
+                      {modeCopy[mode].short}
                     </button>
                   ))}
+                </div>
+                <div className="attribute-costs">
+                  <div className="cost-section vertical-costs">
+                    <div className="cost-section-label">
+                      <strong>Current vertical programmes</strong>
+                      <small>Annual cost</small>
+                    </div>
+                    <div className="programme-cost-grid">
+                      {Array.from({ length: programmeCount }, (_, programmeIndex) => (
+                        <label className="cost-entry" key={programmeIndex}>
+                          <span>Programme {programmeIndex + 1}</span>
+                          <div><i>$</i><input
+                            aria-label={`Annual cost for ${dimension.name}, programme ${programmeIndex + 1}, in thousands`}
+                            min="0"
+                            step="10"
+                            type="number"
+                            value={dimension.programmeCosts[programmeIndex]}
+                            onChange={(event) =>
+                              updateProgrammeCost(
+                                dimension.id,
+                                programmeIndex,
+                                Number(event.target.value),
+                              )
+                            }
+                          /><i>k/yr</i></div>
+                        </label>
+                      ))}
+                    </div>
+                    <small className="combined-cost">
+                      Combined current cost: <strong>{money(verticalCostForDimension(dimension, programmeCount))}/yr</strong>
+                    </small>
+                  </div>
+                  <label className="cost-entry startup-entry">
+                    <span>One-time merge cost</span>
+                    <div><i>$</i><input
+                      aria-label={`One-time merge cost for ${dimension.name} in thousands`}
+                      min="0"
+                      step="10"
+                      type="number"
+                      value={dimension.startupCost}
+                      onChange={(event) =>
+                        updateDimension(dimension.id, {
+                          startupCost: Math.max(0, Number(event.target.value)),
+                        })
+                      }
+                    /><i>k once</i></div>
+                  </label>
+                  <label className="cost-entry merged-entry">
+                    <span>Merged service cost</span>
+                    <div><i>$</i><input
+                      aria-label={`Annual merged service cost for ${dimension.name} in thousands`}
+                      min="0"
+                      step="10"
+                      type="number"
+                      value={dimension.mergedCost}
+                      onChange={(event) =>
+                        updateDimension(dimension.id, {
+                          mergedCost: Math.max(0, Number(event.target.value)),
+                        })
+                      }
+                    /><i>k/yr</i></div>
+                  </label>
                 </div>
               </div>
             ))}
           </div>
-
-          <details className="assumptions" open>
-            <summary>
-              <span>
-                <span className="step">02 · Tune</span>
-                Model assumptions
-              </span>
-              <small>2 levers</small>
-            </summary>
-            <div className="assumption-grid">
-              <label>
-                <span>Coordination efficiency <strong>{pct(coordinationEfficiency)}</strong></span>
-                <input
-                  type="range"
-                  min="0"
-                  max="0.6"
-                  step="0.01"
-                  value={coordinationEfficiency}
-                  onChange={(event) => {
-                    setCoordinationEfficiency(Number(event.target.value));
-                    setActivePreset("custom");
-                  }}
-                />
-                <small>Savings on duplicated work after the first stream</small>
-              </label>
-              <label>
-                <span>Integrated cost <strong>{integrationMultiplier.toFixed(2)}×</strong></span>
-                <input
-                  type="range"
-                  min="0.8"
-                  max="1.8"
-                  step="0.01"
-                  value={integrationMultiplier}
-                  onChange={(event) => {
-                    setIntegrationMultiplier(Number(event.target.value));
-                    setActivePreset("custom");
-                  }}
-                />
-                <small>Shared capability cost vs. one stream’s original cost</small>
-              </label>
-            </div>
-          </details>
         </aside>
 
         <section className="model" aria-label="Integration cost model">
           <div className="panel-heading model-heading">
             <div>
-              <p className="step">03 · Compare</p>
+              <p className="step">02 · Compare</p>
               <h2>Cost impact</h2>
             </div>
             <div className="legend" aria-label="Visualization legend">
-              <span><i className="legend-independent" />Separate</span>
-              <span><i className="legend-coordinated" />Coordinated</span>
-              <span><i className="legend-integrated" />Integrated</span>
+              <span><i className="legend-independent" />Vertical programmes</span>
+              <span><i className="legend-integrated" />Merged service</span>
             </div>
           </div>
 
           <div className="metrics">
             <Metric
-              label="Independent baseline"
+              label="Current annual cost"
               value={money(results.baseline)}
-              note={`${programmeCount} streams × current delivery`}
+              note={`Total across ${programmeCount} vertical programmes`}
             />
             <Metric
-              label="Steady-state cost"
+              label="Proposed annual cost"
               value={money(results.steadyState)}
               note={`${money(Math.abs(results.savings))} ${results.savings >= 0 ? "below" : "above"} baseline`}
               tone={results.savings >= 0 ? "positive" : "warning"}
@@ -586,11 +538,11 @@ export default function Home() {
           <section className="payoff" aria-labelledby="payoff-title">
             <div className="payoff-heading">
               <div>
-                <p className="step">04 · Payoff</p>
+                <p className="step">03 · Payoff</p>
                 <h2 id="payoff-title">When the investment turns into savings</h2>
                 <p>
-                  Cumulative delivery cost includes the upfront investment at the
-                  start, then adds each operating model’s annual run rate.
+                  The proposed model starts with merge costs, then accumulates the
+                  selected annual cost for every service attribute.
                 </p>
               </div>
               <label className="horizon-control">
@@ -608,9 +560,9 @@ export default function Home() {
 
             <div className="payoff-summary">
               <div>
-                <span>Upfront investment</span>
+                <span>Total merge startup cost</span>
                 <strong>{money(results.upfrontInvestment)}</strong>
-                <small>Only coordinated and integrated dimensions</small>
+                <small>One-time costs for attributes selected to merge</small>
               </div>
               <div className={results.paybackYears === null ? "warning" : "positive"}>
                 <span>Estimated payback</span>
@@ -629,7 +581,7 @@ export default function Home() {
                   {timeline.at(-1)!.netSavings >= 0 ? "" : "−"}
                   {money(Math.abs(timeline.at(-1)!.netSavings))}
                 </strong>
-                <small>Baseline cost minus scenario cost</small>
+                <small>Current vertical cost minus proposed cost</small>
               </div>
             </div>
 
@@ -646,13 +598,13 @@ export default function Home() {
                   <thead>
                     <tr>
                       <th scope="col">Point in time</th>
-                      <th scope="col">Independent baseline</th>
-                      <th scope="col">Integrated scenario</th>
+                      <th scope="col">Current vertical programmes</th>
+                      <th scope="col">Proposed operating model</th>
                       <th scope="col">Cumulative net savings</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {timeline.map((point) => {
+                    {annualTimeline.map((point) => {
                       const isPayoffYear =
                         results.paybackYears !== null &&
                         results.paybackYears <= horizonYears &&
@@ -680,31 +632,30 @@ export default function Home() {
 
           <div className="journey">
             <div className="journey-rail" aria-hidden="true">
-              <span>Independent</span>
+              <span>Current</span>
               <i />
-              <span>Coordinated</span>
-              <i />
-              <span>Integrated</span>
+              <span>Proposed</span>
             </div>
 
             <article className="stage stage-independent">
               <div className="stage-copy">
                 <span className="stage-index">A</span>
                 <div>
-                  <h3>Independent delivery</h3>
-                  <p>Every stream carries the full set of costs.</p>
+                  <h3>Current vertical programmes</h3>
+                  <p>Each programme carries its own annual cost for every attribute.</p>
                 </div>
                 <strong>{money(results.baseline)}</strong>
               </div>
               <div className="programme-grid" style={{ "--programmes": programmeCount } as React.CSSProperties}>
                 {Array.from({ length: programmeCount }, (_, programmeIndex) => (
                   <div className="programme" key={programmeIndex}>
-                    <span className="programme-label">Stream {programmeIndex + 1}</span>
+                    <span className="programme-label">Programme {programmeIndex + 1}</span>
                     <div className="block-grid">
                       {dimensions.map((dimension) => (
                         <CostBlock
                           compact
                           dimension={dimension}
+                          displayCost={dimension.programmeCosts[programmeIndex]}
                           key={dimension.id}
                           maxCost={maxCost}
                           color={programColors[programmeIndex]}
@@ -716,121 +667,40 @@ export default function Home() {
               </div>
             </article>
 
-            <article className="stage stage-coordinated">
+            <article className="stage stage-integrated">
               <div className="stage-copy">
                 <span className="stage-index">B</span>
                 <div>
-                  <h3>Coordinated delivery</h3>
-                  <p>Shared work appears once; protected work stays separate.</p>
-                </div>
-                <strong>{money(
-                  dimensions.reduce(
-                    (sum, dimension) =>
-                      sum +
-                      (dimension.mode === "independent"
-                        ? dimension.cost * programmeCount
-                        : dimension.cost * (1 + (programmeCount - 1) * (1 - coordinationEfficiency))),
-                    0,
-                  ),
-                )}</strong>
-              </div>
-              <div className="coordination-canvas">
-                <div className="separate-stack">
-                  {independent.length ? (
-                    independent.map((dimension) => (
-                      <div className="duplicate-set" key={dimension.id}>
-                        {Array.from({ length: programmeCount }, (_, programmeIndex) => (
-                          <CostBlock
-                            compact
-                            dimension={dimension}
-                            key={programmeIndex}
-                            maxCost={maxCost}
-                            color={programColors[programmeIndex]}
-                          />
-                        ))}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="empty-state">No dimensions remain fully separate.</p>
-                  )}
-                </div>
-                <div className="shared-stack">
-                  {[...coordinated, ...integrated].length ? (
-                    [...coordinated, ...integrated].map((dimension) => (
-                      <CostBlock
-                        dimension={dimension}
-                        displayCost={
-                          dimension.cost *
-                          (1 +
-                            (programmeCount - 1) *
-                              (1 - coordinationEfficiency))
-                        }
-                        key={dimension.id}
-                        maxCost={maxCost}
-                        color="#efb8e8"
-                        suffix="shared"
-                      />
-                    ))
-                  ) : (
-                    <p className="empty-state">Choose Coordinate or Integrate to reveal shared work.</p>
-                  )}
-                </div>
-              </div>
-            </article>
-
-            <article className="stage stage-integrated">
-              <div className="stage-copy">
-                <span className="stage-index">C</span>
-                <div>
-                  <h3>Integrated operating model</h3>
-                  <p>One system capability replaces duplicated programme support.</p>
+                  <h3>Proposed operating model</h3>
+                  <p>Merged attributes use the new service cost; the rest remain vertical.</p>
                 </div>
                 <strong>{money(results.steadyState)}</strong>
               </div>
               <div className="integrated-canvas">
                 <div className="system-bar">
-                  <span>Shared operating system</span>
-                  <strong>{integrated.length} integrated</strong>
+                  <span>Merged service</span>
+                  <strong>{merged.length} attribute{merged.length === 1 ? "" : "s"}</strong>
                 </div>
                 <div className="final-blocks">
-                  {integrated.map((dimension) => (
+                  {merged.map((dimension) => (
                     <CostBlock
                       dimension={dimension}
-                      displayCost={costForDimension(
-                        dimension,
-                        programmeCount,
-                        coordinationEfficiency,
-                        integrationMultiplier,
-                      )}
+                      displayCost={dimension.mergedCost}
                       key={dimension.id}
                       maxCost={maxCost}
                       color="#ffb74d"
                     />
                   ))}
-                  {coordinated.map((dimension) => (
-                    <CostBlock
-                      dimension={dimension}
-                      displayCost={costForDimension(
-                        dimension,
-                        programmeCount,
-                        coordinationEfficiency,
-                        integrationMultiplier,
-                      )}
-                      key={dimension.id}
-                      maxCost={maxCost}
-                      color="#efb8e8"
-                    />
-                  ))}
                 </div>
-                {independent.length > 0 && (
+                {separate.length > 0 && (
                   <div className="retained-note">
-                    <strong>{independent.length}</strong>
-                    <span>dimension{independent.length === 1 ? "" : "s"} remain stream-specific</span>
+                    <strong>{separate.length}</strong>
+                    <span>attribute{separate.length === 1 ? "" : "s"} remain programme-specific</span>
                     <small>
                       {money(
-                        independent.reduce(
+                        separate.reduce(
                           (sum, dimension) =>
-                            sum + dimension.cost * programmeCount,
+                            sum + verticalCostForDimension(dimension, programmeCount),
                           0,
                         ),
                       )} retained cost
@@ -854,8 +724,8 @@ export default function Home() {
                       : `This scenario pays back in approximately ${paybackLabel(results.paybackYears)}.`}
               </strong>
               <p>
-                {integrated.length} integrated · {coordinated.length} coordinated · {independent.length} retained.
-                {" "}{money(results.upfrontInvestment)} upfront investment; annual run-rate {results.savings >= 0 ? "improves" : "increases"} by {money(Math.abs(results.savings))}.
+                {merged.length} merged · {separate.length} kept vertical.
+                {" "}{money(results.upfrontInvestment)} startup investment; annual run-rate {results.savings >= 0 ? "improves" : "increases"} by {money(Math.abs(results.savings))}.
               </p>
             </div>
           </div>
@@ -863,12 +733,11 @@ export default function Home() {
           <details className="math-note">
             <summary>How the estimate is calculated</summary>
             <p>
-              Baseline cost equals each dimension’s cost multiplied by the number of streams.
-              Coordination reduces only duplicated work after the first stream. Integration
-              replaces all stream costs with one shared cost using the integrated-cost multiplier.
-              Upfront investment is entered for each dimension and counted only when that
-              dimension is coordinated or integrated. Payback is the point where cumulative
-              scenario cost falls below cumulative independent-delivery cost.
+              Current annual cost is the sum of each vertical programme’s entered cost.
+              For an attribute selected to merge, that combined cost is replaced by the entered
+              merged-service annual cost and its one-time startup cost is added at the beginning.
+              Attributes kept vertical retain their programme costs. Payback is the point where
+              cumulative proposed cost falls below cumulative current cost.
             </p>
           </details>
         </section>

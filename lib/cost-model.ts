@@ -1,10 +1,11 @@
-export type IntegrationMode = "independent" | "coordinated" | "integrated";
+export type IntegrationMode = "separate" | "merged";
 
 export type Dimension = {
   id: number;
   name: string;
-  cost: number;
-  upfrontCost: number;
+  programmeCosts: number[];
+  startupCost: number;
+  mergedCost: number;
   mode: IntegrationMode;
 };
 
@@ -25,52 +26,45 @@ export type TimelinePoint = {
   netSavings: number;
 };
 
+export function verticalCostForDimension(
+  dimension: Dimension,
+  programmeCount: number,
+) {
+  return dimension.programmeCosts
+    .slice(0, programmeCount)
+    .reduce((sum, cost) => sum + cost, 0);
+}
+
 export function costForDimension(
   dimension: Dimension,
-  programmes: number,
-  coordinationEfficiency: number,
-  integrationMultiplier: number,
+  programmeCount: number,
 ) {
-  if (dimension.mode === "independent") return dimension.cost * programmes;
-  if (dimension.mode === "coordinated") {
-    return (
-      dimension.cost *
-      (1 + (programmes - 1) * (1 - coordinationEfficiency))
-    );
-  }
-  return dimension.cost * integrationMultiplier;
+  return dimension.mode === "merged"
+    ? dimension.mergedCost
+    : verticalCostForDimension(dimension, programmeCount);
 }
 
 export function calculateScenario(
   dimensions: Dimension[],
-  programmes: number,
-  coordinationEfficiency: number,
-  integrationMultiplier: number,
+  programmeCount: number,
 ): ScenarioResults {
   const baseline = dimensions.reduce(
-    (sum, dimension) => sum + dimension.cost * programmes,
+    (sum, dimension) =>
+      sum + verticalCostForDimension(dimension, programmeCount),
     0,
   );
   const steadyState = dimensions.reduce(
-    (sum, dimension) =>
-      sum +
-      costForDimension(
-        dimension,
-        programmes,
-        coordinationEfficiency,
-        integrationMultiplier,
-      ),
+    (sum, dimension) => sum + costForDimension(dimension, programmeCount),
     0,
   );
   const upfrontInvestment = dimensions.reduce(
     (sum, dimension) =>
-      sum + (dimension.mode === "independent" ? 0 : dimension.upfrontCost),
+      sum + (dimension.mode === "merged" ? dimension.startupCost : 0),
     0,
   );
   const savings = baseline - steadyState;
   const firstYearSavings = savings - upfrontInvestment;
-  const paybackYears =
-    savings > 0 ? upfrontInvestment / savings : null;
+  const paybackYears = savings > 0 ? upfrontInvestment / savings : null;
 
   return {
     baseline,
@@ -90,7 +84,9 @@ export function buildCostTimeline(
   >,
   horizonYears: number,
 ): TimelinePoint[] {
-  return Array.from({ length: horizonYears + 1 }, (_, year) => {
+  const months = horizonYears * 12;
+  return Array.from({ length: months + 1 }, (_, month) => {
+    const year = month / 12;
     const baseline = results.baseline * year;
     const scenario = results.upfrontInvestment + results.steadyState * year;
     return {

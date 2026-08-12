@@ -25,7 +25,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const baseUrl = new URL(`${protocol}://${host}`);
   const title = "Integration Cost Studio";
   const description =
-    "Model the cost and impact of coordinating or integrating delivery dimensions.";
+    "Compare vertical programme costs with the startup and annual cost of a merged service.";
 
   return {
     metadataBase: baseUrl,
