@@ -458,6 +458,34 @@ input[type="range"] {
   background: rgba(255, 183, 77, 0.13);
 }
 
+.inactive-costs {
+  grid-column: span 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  padding: 14px;
+  border: 1px dashed #d3d4cd;
+  background: repeating-linear-gradient(-45deg, #f8f8f3, #f8f8f3 8px, #f3f3ed 8px, #f3f3ed 16px);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.inactive-costs strong {
+  color: #5f6865;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.inactive-costs span {
+  font-size: 8px;
+  line-height: 1.35;
+}
+
 .combined-cost {
   display: block;
   margin-top: 7px;
@@ -1209,6 +1237,10 @@ summary:focus-visible {
   }
 
   .vertical-costs {
+    grid-column: auto;
+  }
+
+  .inactive-costs {
     grid-column: auto;
   }
 

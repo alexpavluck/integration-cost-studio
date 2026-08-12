@@ -393,9 +393,9 @@ export default function Home() {
           <div className="cost-guide" aria-label="Cost model structure">
             <div><strong>1</strong><span>Current programme costs<small>Annual cost for each vertical</small></span></div>
             <i aria-hidden="true">+</i>
-            <div><strong>2</strong><span>Merge startup cost<small>One-time implementation investment</small></span></div>
+            <div><strong>2</strong><span>Merge startup cost<small>One-time cost only when merged</small></span></div>
             <i aria-hidden="true">→</i>
-            <div><strong>3</strong><span>Merged service cost<small>New annual run rate after merging</small></span></div>
+            <div><strong>3</strong><span>Merged service cost<small>Annual cost only when merged</small></span></div>
           </div>
 
           <div className="dimension-header">
@@ -461,36 +461,48 @@ export default function Home() {
                       Combined current cost: <strong>{money(verticalCostForDimension(dimension, programmeCount))}/yr</strong>
                     </small>
                   </div>
-                  <label className="cost-entry startup-entry">
-                    <span>One-time merge cost</span>
-                    <div><i>$</i><input
-                      aria-label={`One-time merge cost for ${dimension.name} in thousands`}
-                      min="0"
-                      step="10"
-                      type="number"
-                      value={dimension.startupCost}
-                      onChange={(event) =>
-                        updateDimension(dimension.id, {
-                          startupCost: Math.max(0, Number(event.target.value)),
-                        })
-                      }
-                    /><i>k once</i></div>
-                  </label>
-                  <label className="cost-entry merged-entry">
-                    <span>Merged service cost</span>
-                    <div><i>$</i><input
-                      aria-label={`Annual merged service cost for ${dimension.name} in thousands`}
-                      min="0"
-                      step="10"
-                      type="number"
-                      value={dimension.mergedCost}
-                      onChange={(event) =>
-                        updateDimension(dimension.id, {
-                          mergedCost: Math.max(0, Number(event.target.value)),
-                        })
-                      }
-                    /><i>k/yr</i></div>
-                  </label>
+                  {dimension.mode === "merged" ? (
+                    <>
+                      <label className="cost-entry startup-entry">
+                        <span>One-time merge cost</span>
+                        <div><i>$</i><input
+                          aria-label={`One-time merge cost for ${dimension.name} in thousands`}
+                          min="0"
+                          step="10"
+                          type="number"
+                          value={dimension.startupCost}
+                          onChange={(event) =>
+                            updateDimension(dimension.id, {
+                              startupCost: Math.max(0, Number(event.target.value)),
+                            })
+                          }
+                        /><i>k once</i></div>
+                      </label>
+                      <label className="cost-entry merged-entry">
+                        <span>Merged service cost</span>
+                        <div><i>$</i><input
+                          aria-label={`Annual merged service cost for ${dimension.name} in thousands`}
+                          min="0"
+                          step="10"
+                          type="number"
+                          value={dimension.mergedCost}
+                          onChange={(event) =>
+                            updateDimension(dimension.id, {
+                              mergedCost: Math.max(0, Number(event.target.value)),
+                            })
+                          }
+                        /><i>k/yr</i></div>
+                      </label>
+                    </>
+                  ) : (
+                    <div
+                      aria-label={`${dimension.name} has no merge startup cost or merged service cost while kept separate`}
+                      className="inactive-costs"
+                    >
+                      <strong>Merge costs do not apply</strong>
+                      <span>This attribute remains in the vertical programmes.</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

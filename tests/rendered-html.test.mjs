@@ -34,6 +34,7 @@ test("server-renders the integration cost model", async () => {
   assert.match(html, /Current annual cost/);
   assert.match(html, /Current vertical programmes/);
   assert.match(html, /Merged service cost/);
+  assert.match(html, /Merge costs do not apply/);
   assert.match(html, /When the investment turns into savings/);
   assert.match(html, /Year-by-year payoff table/);
   assert.match(html, /Proposed operating model/);
