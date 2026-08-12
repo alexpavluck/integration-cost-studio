@@ -38,6 +38,10 @@ test("server-renders the integration cost model", async () => {
   assert.match(html, /When the investment turns into savings/);
   assert.match(html, /Year-by-year payoff table/);
   assert.match(html, /Proposed operating model/);
+  assert.match(html, /Merged attributes/);
+  assert.match(html, /Saves annually/);
+  assert.match(html, /Kept in vertical programmes/);
+  assert.match(html, /No startup or merged-service cost/);
   assert.match(html, /http:\/\/localhost\/og\.png/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|SkeletonPreview/);
 });
@@ -60,6 +64,7 @@ test("ships without disposable starter assets", async () => {
   assert.match(page, /startupCost/);
   assert.match(page, /mergedCost/);
   assert.match(page, /PayoffChart/);
+  assert.match(page, /Costs more annually/);
   assert.match(layout, /generateMetadata/);
   assert.match(css, /@media \(max-width: 760px\)/);
   assert.match(css, /prefers-reduced-motion/);

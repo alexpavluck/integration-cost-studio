@@ -298,6 +298,21 @@ export default function Home() {
   );
   const separate = dimensions.filter((item) => item.mode === "separate");
   const merged = dimensions.filter((item) => item.mode === "merged");
+  const mergedCurrentCost = merged.reduce(
+    (sum, dimension) =>
+      sum + verticalCostForDimension(dimension, programmeCount),
+    0,
+  );
+  const mergedServiceCost = merged.reduce(
+    (sum, dimension) => sum + dimension.mergedCost,
+    0,
+  );
+  const mergedAnnualChange = mergedCurrentCost - mergedServiceCost;
+  const separateAnnualCost = separate.reduce(
+    (sum, dimension) =>
+      sum + verticalCostForDimension(dimension, programmeCount),
+    0,
+  );
 
   const resizeDimensions = (nextCount: number) => {
     setDimensionCount(nextCount);
@@ -688,37 +703,114 @@ export default function Home() {
                 </div>
                 <strong>{money(results.steadyState)}</strong>
               </div>
-              <div className="integrated-canvas">
-                <div className="system-bar">
-                  <span>Merged service</span>
-                  <strong>{merged.length} attribute{merged.length === 1 ? "" : "s"}</strong>
-                </div>
-                <div className="final-blocks">
-                  {merged.map((dimension) => (
-                    <CostBlock
-                      dimension={dimension}
-                      displayCost={dimension.mergedCost}
-                      key={dimension.id}
-                      maxCost={maxCost}
-                      color="#ffb74d"
-                    />
-                  ))}
-                </div>
-                {separate.length > 0 && (
-                  <div className="retained-note">
-                    <strong>{separate.length}</strong>
-                    <span>attribute{separate.length === 1 ? "" : "s"} remain programme-specific</span>
-                    <small>
-                      {money(
-                        separate.reduce(
-                          (sum, dimension) =>
-                            sum + verticalCostForDimension(dimension, programmeCount),
-                          0,
-                        ),
-                      )} retained cost
-                    </small>
+              <div className="outcome-groups">
+                <section className="outcome-group merged-group" aria-labelledby="merged-attributes-title">
+                  <div className="outcome-group-heading">
+                    <div>
+                      <span className="outcome-badge merged-badge">Merged</span>
+                      <h4 id="merged-attributes-title">Merged attributes</h4>
+                      <small>{merged.length} attribute{merged.length === 1 ? "" : "s"} use the new shared service</small>
+                    </div>
+                    <div className={`group-change ${mergedAnnualChange > 0 ? "saving" : mergedAnnualChange < 0 ? "increase" : "neutral"}`}>
+                      <span>
+                        {mergedAnnualChange > 0
+                          ? "↓ Annual savings"
+                          : mergedAnnualChange < 0
+                            ? "↑ Annual increase"
+                            : "No annual change"}
+                      </span>
+                      <strong>{money(Math.abs(mergedAnnualChange))}/yr</strong>
+                    </div>
                   </div>
-                )}
+
+                  {merged.length ? (
+                    <div className="outcome-card-list">
+                      {merged.map((dimension) => {
+                        const currentCost = verticalCostForDimension(
+                          dimension,
+                          programmeCount,
+                        );
+                        const annualChange = currentCost - dimension.mergedCost;
+                        return (
+                          <article className="attribute-outcome merged-outcome" key={dimension.id}>
+                            <div className="outcome-title">
+                              <strong>{dimension.name}</strong>
+                              <span>Merged service</span>
+                            </div>
+                            <div className="cost-comparison">
+                              <div>
+                                <small>Current combined</small>
+                                <strong>{money(currentCost)}/yr</strong>
+                              </div>
+                              <i aria-hidden="true">→</i>
+                              <div>
+                                <small>Merged service</small>
+                                <strong>{money(dimension.mergedCost)}/yr</strong>
+                              </div>
+                            </div>
+                            <div className={`attribute-change ${annualChange > 0 ? "saving" : annualChange < 0 ? "increase" : "neutral"}`}>
+                              <span>
+                                {annualChange > 0
+                                  ? "↓ Saves annually"
+                                  : annualChange < 0
+                                    ? "↑ Costs more annually"
+                                    : "No annual change"}
+                              </span>
+                              <strong>{money(Math.abs(annualChange))}/yr</strong>
+                            </div>
+                            <small className="startup-note">
+                              {money(dimension.startupCost)} one-time startup cost
+                            </small>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="outcome-empty">No attributes are selected to merge.</p>
+                  )}
+                </section>
+
+                <section className="outcome-group separate-group" aria-labelledby="separate-attributes-title">
+                  <div className="outcome-group-heading">
+                    <div>
+                      <span className="outcome-badge separate-badge">Not merged</span>
+                      <h4 id="separate-attributes-title">Kept in vertical programmes</h4>
+                      <small>{separate.length} attribute{separate.length === 1 ? "" : "s"} continue unchanged</small>
+                    </div>
+                    <div className="retained-total">
+                      <span>Retained annual cost</span>
+                      <strong>{money(separateAnnualCost)}/yr</strong>
+                    </div>
+                  </div>
+
+                  {separate.length ? (
+                    <div className="outcome-card-list separate-card-list">
+                      {separate.map((dimension) => (
+                        <article className="attribute-outcome separate-outcome" key={dimension.id}>
+                          <div className="outcome-title">
+                            <strong>{dimension.name}</strong>
+                            <span>Kept separate</span>
+                          </div>
+                          <div className="retained-programmes">
+                            {Array.from({ length: programmeCount }, (_, programmeIndex) => (
+                              <span key={programmeIndex}>
+                                Programme {programmeIndex + 1}
+                                <strong>{money(dimension.programmeCosts[programmeIndex])}/yr</strong>
+                              </span>
+                            ))}
+                          </div>
+                          <div className="retained-footer">
+                            <span>Combined annual cost</span>
+                            <strong>{money(verticalCostForDimension(dimension, programmeCount))}/yr</strong>
+                            <small>No startup or merged-service cost</small>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="outcome-empty">All attributes are selected to merge.</p>
+                  )}
+                </section>
               </div>
             </article>
           </div>
