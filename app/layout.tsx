@@ -23,9 +23,9 @@ export async function generateMetadata(): Promise<Metadata> {
     requestHeaders.get("x-forwarded-proto") ??
     (host.includes("localhost") ? "http" : "https");
   const baseUrl = new URL(`${protocol}://${host}`);
-  const title = "Integration Cost Studio";
+  const title = "Vertical Program Integration Studio";
   const description =
-    "Compare vertical programme costs with the startup and annual cost of a merged service.";
+    "Two-stage evaluator for integrating vertical health programs: optimize on cost under hard constraints, then stress-test the shortlist for robustness.";
 
   return {
     metadataBase: baseUrl,
