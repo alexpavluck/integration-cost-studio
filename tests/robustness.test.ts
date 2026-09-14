@@ -75,7 +75,7 @@ test("Stage 2 surfaces a worst-case difference the point estimate hides", () => 
   }
   // The point-estimate winner and the robust picks genuinely diverge: a bundle
   // carrying Distribution is cheapest at the centre, but keeping Distribution
-  // standalone is the maximin (best worst-case) and minimum-regret choice.
+  // standalone is the maximin (best worst-case) and smallest-worst-shortfall choice.
   assert.ok(
     withDistribution.some((entry) => entry.bundle.id === stage2.pointEstimateBundleId),
     "the point estimate should favour a Distribution bundle",
@@ -85,19 +85,39 @@ test("Stage 2 surfaces a worst-case difference the point estimate hides", () => 
   assert.notEqual(stage2.pointEstimateBundleId, stage2.maximinBundleId);
 });
 
-test("regret is non-negative and the recommended pick has the minimum max-regret", () => {
+test("shortfall is non-negative and the recommended pick has the smallest worst shortfall", () => {
   const scenario = createExampleScenario();
-  const stage1 = runStage1(scenario);
-  const stage2 = runStage2(scenario, stage1.finalists);
+  const stage2 = runStage2(scenario, runStage1(scenario, "cost").finalists);
 
   for (const entry of stage2.perBundle) {
-    assert.ok(entry.maxRegret >= 0);
-    assert.ok(entry.summary.sharePositive >= 0 && entry.summary.sharePositive <= 1);
+    assert.ok(entry.worstShortfall.amount >= 0);
+    assert.ok(
+      entry.worstShortfall.bestNetSavings >= entry.worstShortfall.ownNetSavings,
+      "the bundle that beat it cannot have done worse",
+    );
+    assert.equal(
+      Math.round(entry.worstShortfall.amount),
+      Math.round(entry.worstShortfall.bestNetSavings - entry.worstShortfall.ownNetSavings),
+    );
   }
+
+  const smallest = Math.min(...stage2.perBundle.map((e) => e.worstShortfall.amount));
   const recommended = stage2.perBundle.find(
-    (entry) => entry.bundle.id === stage2.recommendedBundleId,
+    (e) => e.bundle.id === stage2.recommendedBundleId,
   );
-  const minRegret = Math.min(...stage2.perBundle.map((e) => e.maxRegret));
-  assert.ok(recommended);
-  assert.equal(recommended!.maxRegret, minRegret);
+  assert.equal(recommended!.worstShortfall.amount, smallest);
+});
+
+test("the worst shortfall names a real grid cell on the bundle's own grid", () => {
+  const scenario = createExampleScenario();
+  const stage2 = runStage2(scenario, runStage1(scenario, "cost").finalists);
+  for (const entry of stage2.perBundle) {
+    const cell = entry.cells.find(
+      (c) =>
+        c.integratedFraction === entry.worstShortfall.integratedFraction &&
+        c.transitionFraction === entry.worstShortfall.transitionFraction,
+    );
+    assert.ok(cell, "the cited cell must exist");
+    assert.equal(cell!.netSavings, entry.worstShortfall.ownNetSavings);
+  }
 });
