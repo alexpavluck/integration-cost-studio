@@ -141,6 +141,8 @@ export default function Home() {
               onObjectiveChange={setObjective}
               comparison={comparison}
               onAdopt={(ids) => setScenario(setPlannedIntegration(scenario, ids))}
+              selectedFinalistId={selectedFinalistId}
+              onSelectFinalist={setSelectedFinalistId}
             />
             <SensitivityView
               stage2={stage2}
