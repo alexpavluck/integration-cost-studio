@@ -138,7 +138,7 @@ test("userPlan reflects plannedIntegration and is evaluated like any bundle", ()
 test("the comparison names what the optimizer would add and drop", () => {
   const scenario = createExampleScenario();
   const stage1 = runStage1(scenario, "staffHours");
-  const comparison = comparePlanToBest(scenario, stage1, "staffHours");
+  const comparison = comparePlanToBest(scenario, stage1);
 
   const planned = new Set(comparison.userPlan.mergedCategoryIds);
   const best = new Set(comparison.best!.mergedCategoryIds);
@@ -151,6 +151,11 @@ test("the comparison names what the optimizer would add and drop", () => {
 test("a better optimum yields a negative objective delta", () => {
   const scenario = createExampleScenario();
   const stage1 = runStage1(scenario, "staffHours");
-  const comparison = comparePlanToBest(scenario, stage1, "staffHours");
+  const comparison = comparePlanToBest(scenario, stage1);
   assert.ok(comparison.objectiveDelta <= 0, "the optimum cannot be worse than the user's plan");
+});
+
+test("stage1 output records the objective it was ranked on", () => {
+  const scenario = createExampleScenario();
+  assert.equal(runStage1(scenario, "vehicleDays").objective, "vehicleDays");
 });

@@ -15,10 +15,14 @@ type LegacyCategory = { shareable?: boolean; canIntegrate?: boolean; plannedInte
 /**
  * v1 stored a single `shareable` flag that meant both "may merge" and "plan to
  * merge". Mapping it to both preserves exactly what an old link used to show.
+ * A genuine v1 link always carried `shareable`, so a missing value only shows
+ * up on truncated or hand-edited input — default it to `false` (not
+ * integrable) rather than `true`, since `canIntegrate` is a safety policy
+ * flag and under-merging is the safe direction to fail in.
  */
 function migrateCategory(category: LegacyCategory & Record<string, unknown>) {
   if (typeof category.canIntegrate === "boolean") return category;
-  const legacy = category.shareable !== false;
+  const legacy = category.shareable === true;
   const { shareable: _dropped, ...rest } = category;
   return { ...rest, canIntegrate: legacy, plannedIntegration: legacy };
 }

@@ -80,6 +80,8 @@ export type Stage1Output = {
   ranked: Bundle[];
   /** The arrangement implied by the user's `plannedIntegration` flags. */
   userPlan: Bundle;
+  /** The objective `finalists` were ranked on, so consumers cannot pair this output with a different one. */
+  objective: Objective;
 };
 
 function subsets<T>(items: T[]): T[][] {
@@ -185,6 +187,7 @@ export function runStage1(
     infeasibleCount,
     ranked,
     userPlan,
+    objective,
   };
 }
 
@@ -218,8 +221,8 @@ export type PlanComparison = {
 export function comparePlanToBest(
   scenario: Scenario,
   stage1: Stage1Output,
-  objective: Objective,
 ): PlanComparison {
+  const objective = stage1.objective;
   const { userPlan } = stage1;
   const best = stage1.finalists[0] ?? null;
   const nameOf = (id: string) =>
