@@ -124,7 +124,7 @@ export function DataEntry({
                   <thead>
                     <tr>
                       <th scope="col">Program</th>
-                      <th scope="col">Standalone $k/yr</th>
+                      <th scope="col">Standalone $/yr</th>
                       {RESOURCE_TYPES.map((resource) => (
                         <th scope="col" key={resource.id}>
                           {resource.label}
@@ -143,7 +143,7 @@ export function DataEntry({
                             <NumberInput
                               ariaLabel={`Standalone cost for ${category.name}, ${program.name}`}
                               prefix="$"
-                              step={10}
+                              step={1000}
                               value={entry.standaloneCost}
                               onChange={(value) => setScenario(updateEntry(scenario, category.id, program.id, { standaloneCost: value }))}
                             />
@@ -190,7 +190,7 @@ export function DataEntry({
                   </label>
                   <div className="range-row">
                     <RangeField
-                      label="Integrated cost $k/yr"
+                      label="Integrated cost $/yr"
                       category={category.id}
                       rangeKey="integratedCost"
                       values={category.integratedCost}
@@ -198,7 +198,7 @@ export function DataEntry({
                       setScenario={setScenario}
                     />
                     <RangeField
-                      label="Transition cost $k (one-time)"
+                      label="Transition cost (one-time)"
                       category={category.id}
                       rangeKey="transitionCost"
                       values={category.transitionCost}

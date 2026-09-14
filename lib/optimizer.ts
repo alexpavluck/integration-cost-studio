@@ -26,7 +26,7 @@ import type { Scenario } from "./model.ts";
  * funding envelope remain hard constraints — only the ranking metric changes.
  */
 export const OBJECTIVES = [
-  { id: "cost", label: "Cost", unit: "$k annualized" },
+  { id: "cost", label: "Cost", unit: "$ annualized" },
   { id: "staffHours", label: "Staff-hours", unit: "hrs/yr" },
   { id: "vehicleDays", label: "Vehicle-days", unit: "veh-days/yr" },
   { id: "fieldDays", label: "Field-days", unit: "field-days/yr" },

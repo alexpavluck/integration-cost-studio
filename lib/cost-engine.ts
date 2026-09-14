@@ -15,6 +15,7 @@ import {
   type ResourceTypeId,
   type Scenario,
 } from "./model.ts";
+import { money } from "./format.ts";
 
 /**
  * Resolves the (possibly uncertainty-scaled) annual integrated cost and one-time
@@ -122,7 +123,7 @@ export function evaluateSelection(
 
   if (annualizedCost > constraints.fundingCeiling) {
     violations.push(
-      `Total funding: $${Math.round(annualizedCost)}k needed exceeds $${Math.round(constraints.fundingCeiling)}k available`,
+      `Total funding: ${money(annualizedCost)} needed exceeds ${money(constraints.fundingCeiling)} available`,
     );
   }
 

@@ -31,7 +31,7 @@ export type ProgramId = string;
 
 /** One program's own (standalone) instance of a category. */
 export type ProgramEntry = {
-  /** Annual cost ($k) of this program running the category on its own. */
+  /** Annual cost of this program running the category on its own. */
   standaloneCost: number;
   /** Resources this standalone instance consumes per year. */
   resourceDraw: ResourceDraw;
@@ -55,9 +55,9 @@ export type Category = {
   governmentFunded: boolean;
   /** Per-program standalone entries, keyed by program id. */
   perProgram: Record<ProgramId, ProgramEntry>;
-  /** Annual cost ($k) of a single shared instance once merged. */
+  /** Annual cost of a single shared instance once merged. */
   integratedCost: CostRange;
-  /** One-time cost ($k) to stand up the merge. */
+  /** One-time cost to stand up the merge. */
   transitionCost: CostRange;
   /** Resources the single shared instance consumes per year. */
   integratedResourceDraw: ResourceDraw;
@@ -72,7 +72,7 @@ export type Constraints = {
   /** Maximum available per resource type per year (hard ceiling, spec §3). */
   resourceCeilings: ResourceDraw;
   /**
-   * Maximum total annualized cost the budget can fund ($k). A hard ceiling like
+   * Maximum total annualized cost the budget can fund. A hard ceiling like
    * the resource ceilings — an arrangement whose annualized cost exceeds it is
    * infeasible. Defaults to the status-quo cost (so the current programs exactly
    * fit today's budget); lower it to model funding going down, which can force
@@ -132,9 +132,9 @@ export function interpRange(range: CostRange, fraction: number): number {
 /**
  * Two generically-named vertical programs that share field infrastructure
  * (modeled on an NTD mass-drug-administration + eye-health pairing). Numbers are
- * illustrative $k and chosen so the point estimate favours merging almost
- * everything, while Distribution's wide cost range makes an all-merge bundle
- * fragile — exactly the tension Stage 2 exists to expose.
+ * illustrative dollar figures chosen so the point estimate favours merging
+ * almost everything, while Distribution's wide cost range makes an all-merge
+ * bundle fragile — exactly the tension Stage 2 exists to expose.
  */
 export function createExampleScenario(): Scenario {
   const programs: Program[] = [
@@ -173,11 +173,11 @@ export function createExampleScenario(): Scenario {
       "Training",
       true,
       {
-        mda: entry(150, { staffHours: 400, vehicleDays: 20, fieldDays: 30 }),
-        eye: entry(120, { staffHours: 360, vehicleDays: 18, fieldDays: 26 }),
+        mda: entry(150000, { staffHours: 400, vehicleDays: 20, fieldDays: 30 }),
+        eye: entry(120000, { staffHours: 360, vehicleDays: 18, fieldDays: 26 }),
       },
-      { low: 200, point: 210, high: 225 },
-      { low: 110, point: 120, high: 135 },
+      { low: 200000, point: 210000, high: 225000 },
+      { low: 110000, point: 120000, high: 135000 },
       { staffHours: 520, vehicleDays: 26, fieldDays: 40 },
     ),
     category(
@@ -185,11 +185,11 @@ export function createExampleScenario(): Scenario {
       "Transportation",
       true,
       {
-        mda: entry(210, { staffHours: 200, vehicleDays: 120, fieldDays: 60 }),
-        eye: entry(180, { staffHours: 180, vehicleDays: 100, fieldDays: 50 }),
+        mda: entry(210000, { staffHours: 200, vehicleDays: 120, fieldDays: 60 }),
+        eye: entry(180000, { staffHours: 180, vehicleDays: 100, fieldDays: 50 }),
       },
-      { low: 280, point: 300, high: 330 },
-      { low: 80, point: 90, high: 105 },
+      { low: 280000, point: 300000, high: 330000 },
+      { low: 80000, point: 90000, high: 105000 },
       { staffHours: 260, vehicleDays: 150, fieldDays: 80 },
     ),
     category(
@@ -197,14 +197,14 @@ export function createExampleScenario(): Scenario {
       "Distribution",
       true,
       {
-        mda: entry(240, { staffHours: 500, vehicleDays: 80, fieldDays: 90 }),
-        eye: entry(200, { staffHours: 440, vehicleDays: 70, fieldDays: 80 }),
+        mda: entry(240000, { staffHours: 500, vehicleDays: 80, fieldDays: 90 }),
+        eye: entry(200000, { staffHours: 440, vehicleDays: 70, fieldDays: 80 }),
       },
       // Deliberately risky: merging only barely beats the two standalone
-      // instances (440) at the point estimate, and at the high end costs well
+      // instances (440000) at the point estimate, and at the high end costs well
       // more than them — so merging Distribution is a marginal, fragile bet.
-      { low: 330, point: 375, high: 520 },
-      { low: 150, point: 190, high: 260 },
+      { low: 330000, point: 375000, high: 520000 },
+      { low: 150000, point: 190000, high: 260000 },
       { staffHours: 650, vehicleDays: 100, fieldDays: 120 },
     ),
     category(
@@ -212,11 +212,11 @@ export function createExampleScenario(): Scenario {
       "Supervision",
       true,
       {
-        mda: entry(160, { staffHours: 300, vehicleDays: 60, fieldDays: 70 }),
-        eye: entry(140, { staffHours: 270, vehicleDays: 54, fieldDays: 62 }),
+        mda: entry(160000, { staffHours: 300, vehicleDays: 60, fieldDays: 70 }),
+        eye: entry(140000, { staffHours: 270, vehicleDays: 54, fieldDays: 62 }),
       },
-      { low: 195, point: 210, high: 235 },
-      { low: 90, point: 100, high: 115 },
+      { low: 195000, point: 210000, high: 235000 },
+      { low: 90000, point: 100000, high: 115000 },
       { staffHours: 380, vehicleDays: 75, fieldDays: 90 },
     ),
     category(
@@ -224,11 +224,11 @@ export function createExampleScenario(): Scenario {
       "Data & M&E",
       true,
       {
-        mda: entry(110, { staffHours: 250, vehicleDays: 10, fieldDays: 20 }),
-        eye: entry(95, { staffHours: 225, vehicleDays: 9, fieldDays: 18 }),
+        mda: entry(110000, { staffHours: 250, vehicleDays: 10, fieldDays: 20 }),
+        eye: entry(95000, { staffHours: 225, vehicleDays: 9, fieldDays: 18 }),
       },
-      { low: 140, point: 150, high: 170 },
-      { low: 70, point: 80, high: 95 },
+      { low: 140000, point: 150000, high: 170000 },
+      { low: 70000, point: 80000, high: 95000 },
       { staffHours: 320, vehicleDays: 12, fieldDays: 25 },
       true, // when merged, the health system funds Data & M&E (country liability)
     ),
@@ -237,8 +237,8 @@ export function createExampleScenario(): Scenario {
       "Drug safety monitoring",
       false, // non-negotiable: drug-specific, can never merge (spec §1, §3)
       {
-        mda: entry(90, { staffHours: 150, vehicleDays: 15, fieldDays: 25 }),
-        eye: entry(70, { staffHours: 120, vehicleDays: 12, fieldDays: 20 }),
+        mda: entry(90000, { staffHours: 150, vehicleDays: 15, fieldDays: 25 }),
+        eye: entry(70000, { staffHours: 120, vehicleDays: 12, fieldDays: 20 }),
       },
       { low: 0, point: 0, high: 0 },
       { low: 0, point: 0, high: 0 },
