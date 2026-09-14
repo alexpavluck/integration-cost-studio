@@ -187,3 +187,80 @@ export function runStage1(
     userPlan,
   };
 }
+
+export type PlanChange = {
+  id: string;
+  name: string;
+  /**
+   * Marginal effect on the active objective of applying this single change to
+   * the user's plan — negative is an improvement. Measured one change at a time
+   * because that is the question a reader actually asks of each row.
+   */
+  objectiveDelta: number;
+};
+
+export type PlanComparison = {
+  userPlan: Bundle;
+  /** Top finalist on the active objective; null when nothing feasible merges. */
+  best: Bundle | null;
+  add: PlanChange[];
+  drop: PlanChange[];
+  /** best − userPlan on the active objective. Negative ⇒ the optimum is better. */
+  objectiveDelta: number;
+};
+
+/**
+ * Contrast the user's proposal with the best feasible arrangement, itemizing the
+ * categories the optimizer would add or drop. This is the payoff of separating
+ * policy from plan: without it the tool can only score what the user already
+ * thought of.
+ */
+export function comparePlanToBest(
+  scenario: Scenario,
+  stage1: Stage1Output,
+  objective: Objective,
+): PlanComparison {
+  const { userPlan } = stage1;
+  const best = stage1.finalists[0] ?? null;
+  const nameOf = (id: string) =>
+    scenario.categories.find((category) => category.id === id)?.name ?? id;
+
+  if (!best) {
+    return { userPlan, best: null, add: [], drop: [], objectiveDelta: 0 };
+  }
+
+  const baselineAnnual = baselineAnnualCost(scenario);
+  const planned = new Set(userPlan.mergedCategoryIds);
+  const chosen = new Set(best.mergedCategoryIds);
+  const planValue = objectiveValue(userPlan.result, objective);
+
+  const marginal = (id: string, next: Set<string>): PlanChange => ({
+    id,
+    name: nameOf(id),
+    objectiveDelta:
+      objectiveValue(
+        toBundle(scenario, [...next], baselineAnnual).result,
+        objective,
+      ) - planValue,
+  });
+
+  const add = best.mergedCategoryIds
+    .filter((id) => !planned.has(id))
+    .map((id) => marginal(id, new Set([...planned, id])));
+
+  const drop = userPlan.mergedCategoryIds
+    .filter((id) => !chosen.has(id))
+    .map((id) => {
+      const next = new Set(planned);
+      next.delete(id);
+      return marginal(id, next);
+    });
+
+  return {
+    userPlan,
+    best,
+    add,
+    drop,
+    objectiveDelta: objectiveValue(best.result, objective) - planValue,
+  };
+}

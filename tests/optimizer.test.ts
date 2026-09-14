@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runStage1 } from "../lib/optimizer.ts";
+import { comparePlanToBest, runStage1 } from "../lib/optimizer.ts";
 import { createExampleScenario } from "../lib/model.ts";
 
 test("returns an all-separate baseline and feasible merge finalists ranked by annualized cost", () => {
@@ -133,4 +133,24 @@ test("userPlan reflects plannedIntegration and is evaluated like any bundle", ()
   assert.deepEqual(userPlan.mergedCategoryIds, expected);
   assert.equal(typeof userPlan.result.feasible, "boolean");
   assert.equal(typeof userPlan.result.programAnnualizedCost, "number");
+});
+
+test("the comparison names what the optimizer would add and drop", () => {
+  const scenario = createExampleScenario();
+  const stage1 = runStage1(scenario, "staffHours");
+  const comparison = comparePlanToBest(scenario, stage1, "staffHours");
+
+  const planned = new Set(comparison.userPlan.mergedCategoryIds);
+  const best = new Set(comparison.best!.mergedCategoryIds);
+
+  for (const change of comparison.add) assert.ok(best.has(change.id) && !planned.has(change.id));
+  for (const change of comparison.drop) assert.ok(planned.has(change.id) && !best.has(change.id));
+  assert.ok(comparison.add.every((c) => c.name.length > 0));
+});
+
+test("a better optimum yields a negative objective delta", () => {
+  const scenario = createExampleScenario();
+  const stage1 = runStage1(scenario, "staffHours");
+  const comparison = comparePlanToBest(scenario, stage1, "staffHours");
+  assert.ok(comparison.objectiveDelta <= 0, "the optimum cannot be worse than the user's plan");
 });
