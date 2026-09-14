@@ -1645,3 +1645,172 @@ footer p {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+
+/* Payback chart. The two series hues are a shade more saturated than --teal and
+   --warning: the brand teal's chroma reads as grey once it is a 2px line, and the
+   warning rust is reserved for breach states. Validated for colour-vision
+   deficiency against the panel surface. */
+:root {
+  --series-integrated: #0a8f80;
+  --series-status-quo: #b4690e;
+}
+
+.payback {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 14px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.payback-head h3 {
+  margin: 0 0 0.25rem;
+}
+
+.payback-head p {
+  margin: 0;
+  color: var(--muted);
+  max-width: 62ch;
+}
+
+.payback-legend {
+  display: flex;
+  gap: 1.25rem;
+  margin: 0.9rem 0 0.25rem;
+  font-size: 0.85rem;
+}
+
+.payback-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.swatch.integrated { background: var(--series-integrated); }
+.swatch.status-quo { background: var(--series-status-quo); }
+
+.payback-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.payback-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.payback-axis-text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.payback-axis-title {
+  fill: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.payback-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.payback-line.integrated { stroke: var(--series-integrated); }
+.payback-line.status-quo { stroke: var(--series-status-quo); }
+
+/* Ink, not the series hue: at 11px a mid-chroma fill misses the 4.5:1 text bar,
+   and sitting at the end of its own line already carries the identity. */
+.payback-series-label {
+  fill: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.payback-crossover {
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.45;
+}
+
+.payback-crossover-dot {
+  fill: var(--ink);
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.payback-crossover-label {
+  fill: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.payback-crosshair {
+  stroke: var(--ink);
+  stroke-width: 1;
+  opacity: 0.25;
+}
+
+/* 2px surface ring so an overlapping pair still reads as two marks. */
+.payback-dot {
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.payback-dot.integrated { fill: var(--series-integrated); }
+.payback-dot.status-quo { fill: var(--series-status-quo); }
+
+.payback-readout {
+  margin: 0.5rem 0 0;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.payback-readout.muted { color: var(--muted); }
+
+.payback-summary {
+  margin: 0.5rem 0 0;
+  max-width: 68ch;
+}
+
+.payback-table {
+  margin-top: 0.9rem;
+  font-size: 0.85rem;
+}
+
+.payback-table summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.payback-table table {
+  border-collapse: collapse;
+  margin-top: 0.6rem;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.payback-table th,
+.payback-table td {
+  text-align: right;
+  padding: 0.3rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.payback-table thead th,
+.payback-table tbody th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 600;
+}

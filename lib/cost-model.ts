@@ -252,3 +252,71 @@ export function rankMergeCandidates(
       return b.annualChange - a.annualChange;
     });
 }
+
+export type PaybackPoint = { year: number; statusQuo: number; integrated: number };
+
+export type PaybackSeries = {
+  points: PaybackPoint[];
+  /** Year the two lines cross, or null when they never do. */
+  crossoverYear: number | null;
+  /** Last year plotted — always far enough out to show the crossover. */
+  maxYear: number;
+  /** Highest cumulative value on either line, for scaling the y axis. */
+  maxValue: number;
+};
+
+/** Hard ceiling on the x axis: a payback 20 years out is a "no" either way. */
+const MAX_PLOTTED_YEARS = 15;
+
+/**
+ * Cumulative cost of staying separate versus integrating, year by year.
+ *
+ * Status quo starts at zero and climbs at the baseline rate. Integration starts
+ * already down the transition cost and climbs more slowly, so the lines cross at
+ * the moment the merge has paid for itself. That crossing is
+ * `transitionCost / annualSavings` — the same expression `calculatePaybackYears`
+ * evaluates, so the chart and the payback figure beside it cannot disagree.
+ *
+ * Costs are totals (program + country). The program-only figure would count work
+ * shifted to the national program as a saving and cross flatteringly early.
+ */
+export function buildPaybackSeries(
+  baselineAnnualCost: number,
+  integratedAnnualCost: number,
+  transitionCost: number,
+  horizonYears: number,
+): PaybackSeries {
+  const annualSavings = baselineAnnualCost - integratedAnnualCost;
+  const crossoverYear = calculatePaybackYears(transitionCost, annualSavings);
+
+  // Extend past the horizon when payback lands beyond it, so the crossing is on
+  // screen rather than implied off the right edge.
+  const needed =
+    crossoverYear === null ? horizonYears : Math.ceil(crossoverYear) + 1;
+  const maxYear = Math.max(
+    1,
+    Math.min(MAX_PLOTTED_YEARS, Math.max(horizonYears, needed)),
+  );
+
+  const points: PaybackPoint[] = [];
+  for (let year = 0; year <= maxYear; year += 1) {
+    points.push({
+      year,
+      statusQuo: baselineAnnualCost * year,
+      integrated: transitionCost + integratedAnnualCost * year,
+    });
+  }
+
+  const maxValue = points.reduce(
+    (worst, point) => Math.max(worst, point.statusQuo, point.integrated),
+    0,
+  );
+
+  return {
+    points,
+    crossoverYear:
+      crossoverYear !== null && crossoverYear <= maxYear ? crossoverYear : null,
+    maxYear,
+    maxValue,
+  };
+}
