@@ -35,7 +35,7 @@ test("each finalist gets a full grid of cells with a central point-estimate cell
   }
 });
 
-test("the point-estimate winner is the all-integrable-merged bundle", () => {
+test("the point-estimate winner is the cheapest bundle on the cost shortlist", () => {
   const scenario = createExampleScenario();
   const stage1 = runStage1(scenario);
   const stage2 = runStage2(scenario, stage1.finalists);
@@ -43,37 +43,45 @@ test("the point-estimate winner is the all-integrable-merged bundle", () => {
     (entry) => entry.bundle.id === stage2.pointEstimateBundleId,
   );
   assert.ok(pointBundle);
-  assert.equal(pointBundle!.bundle.mergedCategoryIds.length, 5);
+  assert.deepEqual(pointBundle!.bundle.mergedCategoryIds, [
+    "data",
+    "training",
+    "transport",
+  ]);
 });
 
 test("Stage 2 surfaces a worst-case difference the point estimate hides", () => {
-  // The all-merge bundle is cheapest at the centre, but including Distribution
-  // (a wide-range category) gives it a worse downside than the bundle that keeps
-  // Distribution standalone. That divergence is exactly what Stage 2 is for.
+  // Distribution has by far the widest cost range, and every resource objective
+  // wants to merge it — so the staff-hours shortlist leads with a bundle that
+  // includes it. Stage 2 is what reveals that the bundle keeping Distribution
+  // standalone survives the downside far better. That divergence is what Stage 2
+  // is for.
   const scenario = createExampleScenario();
-  const stage1 = runStage1(scenario);
+  const stage1 = runStage1(scenario, "staffHours");
   const stage2 = runStage2(scenario, stage1.finalists);
 
-  const allMerge = stage2.perBundle.find(
-    (entry) => entry.bundle.mergedCategoryIds.length === 5,
+  const withDistribution = stage2.perBundle.filter((entry) =>
+    entry.bundle.mergedCategoryIds.includes("distribution"),
   );
   const withoutDistribution = stage2.perBundle.find(
-    (entry) =>
-      entry.bundle.mergedCategoryIds.length === 4 &&
-      !entry.bundle.mergedCategoryIds.includes("distribution"),
+    (entry) => !entry.bundle.mergedCategoryIds.includes("distribution"),
   );
-  assert.ok(allMerge, "all-merge should be a finalist");
+  assert.ok(withDistribution.length > 0, "a Distribution bundle should be a finalist");
   assert.ok(withoutDistribution, "the drop-Distribution bundle should be a finalist");
 
+  for (const entry of withDistribution) {
+    assert.ok(
+      withoutDistribution!.summary.worstNetSavings > entry.summary.worstNetSavings,
+      "keeping Distribution standalone should have the better worst case",
+    );
+  }
+  // The point-estimate winner and the robust picks genuinely diverge: a bundle
+  // carrying Distribution is cheapest at the centre, but keeping Distribution
+  // standalone is the maximin (best worst-case) and minimum-regret choice.
   assert.ok(
-    withoutDistribution!.summary.worstNetSavings >
-      allMerge!.summary.worstNetSavings,
-    "keeping Distribution standalone should have the better worst case",
+    withDistribution.some((entry) => entry.bundle.id === stage2.pointEstimateBundleId),
+    "the point estimate should favour a Distribution bundle",
   );
-  // The point-estimate winner and the robust picks genuinely diverge: all-merge
-  // is cheapest at the centre, but keeping Distribution standalone is the
-  // maximin (best worst-case) and minimum-regret choice.
-  assert.equal(stage2.pointEstimateBundleId, allMerge!.bundle.id);
   assert.equal(stage2.maximinBundleId, withoutDistribution!.bundle.id);
   assert.equal(stage2.recommendedBundleId, withoutDistribution!.bundle.id);
   assert.notEqual(stage2.pointEstimateBundleId, stage2.maximinBundleId);

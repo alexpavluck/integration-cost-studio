@@ -63,15 +63,23 @@ test("the category that cannot integrate never appears in any finalist bundle", 
 test("enumerates 2^k feasible bundles over integrable categories only", () => {
   const scenario = createExampleScenario();
   const stage1 = runStage1(scenario);
-  // 5 integrable categories → 32 selections, all feasible under the roomy example ceilings.
+  // 5 integrable categories → 32 selections; the field-day ceiling rules out 9 of
+  // them, including the status quo, so integration is forced rather than optional.
   assert.equal(stage1.feasibleCount + stage1.infeasibleCount, 32);
-  assert.equal(stage1.infeasibleCount, 0);
+  assert.equal(stage1.feasibleCount, 23);
+  assert.equal(stage1.infeasibleCount, 9);
 });
 
-test("the cheapest finalist merges everything integrable at the point estimate", () => {
+test("the cheapest finalist is the bundle the cost objective is seeded to pick", () => {
   const scenario = createExampleScenario();
   const stage1 = runStage1(scenario);
-  assert.equal(stage1.finalists[0].mergedCategoryIds.length, 5);
+  // Not every integrable category: Distribution barely pays at the point estimate
+  // and Supervision costs more merged, so cost stops at three merges.
+  assert.deepEqual(stage1.finalists[0].mergedCategoryIds, [
+    "data",
+    "training",
+    "transport",
+  ]);
 });
 
 test("payback and net savings are computed against the baseline", () => {
@@ -88,7 +96,8 @@ test("payback and net savings are computed against the baseline", () => {
 test("a status quo that breaches a ceiling is flagged, while merges that relieve it stay feasible", () => {
   const scenario = createExampleScenario();
   // Set the staff-hours ceiling just below the all-standalone draw so the status
-  // quo breaches it; merging strictly reduces usage, so finalists stay feasible.
+  // quo breaches it; the merges the optimizer shortlists relieve it, so finalists
+  // stay feasible.
   const baseUsage = runStage1(scenario).baseline.result.resourceUsage.staffHours;
   scenario.constraints.resourceCeilings.staffHours = baseUsage - 50;
 
@@ -158,4 +167,34 @@ test("a better optimum yields a negative objective delta", () => {
 test("stage1 output records the objective it was ranked on", () => {
   const scenario = createExampleScenario();
   assert.equal(runStage1(scenario, "vehicleDays").objective, "vehicleDays");
+});
+
+test("the four objectives do not all pick the same bundle", () => {
+  const scenario = createExampleScenario();
+  const picks = (["cost", "staffHours", "vehicleDays", "fieldDays"] as const).map(
+    (objective) => runStage1(scenario, objective).finalists[0]?.id ?? "none",
+  );
+  assert.equal(new Set(picks).size, 4, `expected four distinct optima, got ${picks.join(" | ")}`);
+});
+
+test("seeded costs are actual values, not thousands", () => {
+  // A sanity bound, so a future edit cannot silently reintroduce $k scaling.
+  const scenario = createExampleScenario();
+  for (const category of scenario.categories) {
+    for (const entry of Object.values(category.perProgram)) {
+      assert.ok(
+        entry.standaloneCost === 0 || entry.standaloneCost >= 10000,
+        `${category.name} standalone cost ${entry.standaloneCost} looks like thousands`,
+      );
+    }
+  }
+  assert.ok(scenario.constraints.fundingCeiling >= 100000);
+});
+
+test("the demo has an unplanned category the optimizer wants, and an infeasible status quo", () => {
+  const scenario = createExampleScenario();
+  assert.ok(scenario.categories.some((c) => c.canIntegrate && !c.plannedIntegration));
+  const stage1 = runStage1(scenario, "cost");
+  assert.equal(stage1.baseline.result.feasible, false, "status quo should breach a ceiling");
+  assert.ok(stage1.infeasibleCount > 0, "some arrangements must be excluded by constraints");
 });
