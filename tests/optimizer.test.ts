@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { comparePlanToBest, runStage1 } from "../lib/optimizer.ts";
-import { createExampleScenario } from "../lib/model.ts";
+import { RESOURCE_TYPES, createExampleScenario } from "../lib/model.ts";
+import { evaluateSelection } from "../lib/cost-engine.ts";
 
 test("returns an all-separate baseline and feasible merge finalists ranked by annualized cost", () => {
   const scenario = createExampleScenario();
@@ -197,4 +198,35 @@ test("the demo has an unplanned category the optimizer wants, and an infeasible 
   const stage1 = runStage1(scenario, "cost");
   assert.equal(stage1.baseline.result.feasible, false, "status quo should breach a ceiling");
   assert.ok(stage1.infeasibleCount > 0, "some arrangements must be excluded by constraints");
+});
+
+test("leanest reports the lowest figure any arrangement reaches", () => {
+  const scenario = createExampleScenario();
+  const stage1 = runStage1(scenario, "cost");
+
+  // Nothing reachable — feasible shortlist or the status quo — beats it.
+  const reachable = [...stage1.ranked, stage1.baseline];
+  assert.equal(
+    stage1.leanest.programResourceUsage.staffHours,
+    Math.min(...reachable.map((b) => b.result.programResourceUsage.staffHours)),
+  );
+  assert.equal(
+    stage1.leanest.programAnnualizedCost,
+    Math.min(...reachable.map((b) => b.result.programAnnualizedCost)),
+  );
+
+  // Merging everything integrable is not the leanest arrangement on any figure,
+  // which is precisely why the constraints panel cannot assume that it is.
+  const allMerged = evaluateSelection(
+    scenario,
+    new Set(scenario.categories.filter((c) => c.canIntegrate).map((c) => c.id)),
+  );
+  for (const resource of RESOURCE_TYPES) {
+    assert.ok(
+      stage1.leanest.programResourceUsage[resource.id] <
+        allMerged.programResourceUsage[resource.id],
+      `${resource.label}: all-merged is not the leanest arrangement`,
+    );
+  }
+  assert.ok(stage1.leanest.programAnnualizedCost < allMerged.programAnnualizedCost);
 });

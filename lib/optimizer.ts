@@ -17,7 +17,12 @@ import {
   evaluateSelection,
   type EngineResult,
 } from "./cost-engine.ts";
-import type { Scenario } from "./model.ts";
+import {
+  RESOURCE_TYPES,
+  emptyDraw,
+  type ResourceDraw,
+  type Scenario,
+} from "./model.ts";
 
 /**
  * What the shortlist minimizes. Cost is the classic objective, but a program
@@ -80,6 +85,13 @@ export type Stage1Output = {
   ranked: Bundle[];
   /** The arrangement implied by the user's `plannedIntegration` flags. */
   userPlan: Bundle;
+  /**
+   * The lowest each figure reaches across every arrangement, feasible or not.
+   * Someone setting a ceiling needs to know what is physically reachable, so this
+   * deliberately ignores the other ceilings — otherwise a tight ceiling would hide
+   * the very arrangements that justify relaxing it.
+   */
+  leanest: { programAnnualizedCost: number; programResourceUsage: ResourceDraw };
   /** The objective `finalists` were ranked on, so consumers cannot pair this output with a different one. */
   objective: Objective;
 };
@@ -173,6 +185,28 @@ export function runStage1(
     .filter((bundle) => bundle.mergedCategoryIds.length > 0)
     .slice(0, finalistCount);
 
+  // Reduced over every arrangement rather than assuming all-merged is leanest:
+  // merges now trade resources against each other, so the minimum on one figure
+  // can sit in a different bundle from the minimum on another.
+  const leanestUsage = emptyDraw();
+  let leanestCost = Number.POSITIVE_INFINITY;
+  for (const resource of RESOURCE_TYPES) {
+    leanestUsage[resource.id] = Number.POSITIVE_INFINITY;
+  }
+  for (const bundle of allBundles) {
+    leanestCost = Math.min(leanestCost, bundle.result.programAnnualizedCost);
+    for (const resource of RESOURCE_TYPES) {
+      leanestUsage[resource.id] = Math.min(
+        leanestUsage[resource.id],
+        bundle.result.programResourceUsage[resource.id],
+      );
+    }
+  }
+  const leanest = {
+    programAnnualizedCost: leanestCost,
+    programResourceUsage: leanestUsage,
+  };
+
   const plannedIds = scenario.categories
     .filter((category) => category.canIntegrate && category.plannedIntegration)
     .map((category) => category.id);
@@ -187,6 +221,7 @@ export function runStage1(
     infeasibleCount,
     ranked,
     userPlan,
+    leanest,
     objective,
   };
 }

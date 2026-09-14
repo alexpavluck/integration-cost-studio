@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createExampleScenario, type Scenario } from "../lib/model.ts";
-import { evaluateSelection } from "../lib/cost-engine.ts";
 import { comparePlanToBest, runStage1, type Objective } from "../lib/optimizer.ts";
 import { runStage2 } from "../lib/robustness.ts";
 import { buildShareUrl, readStateFromHash } from "../lib/share.ts";
@@ -50,12 +49,6 @@ export default function Home() {
   );
 
   const baselineUsage = stage1.baseline.result.resourceUsage;
-  const leanestResult = useMemo(() => {
-    const integrable = new Set(
-      scenario.categories.filter((c) => c.canIntegrate).map((c) => c.id),
-    );
-    return evaluateSelection(scenario, integrable);
-  }, [scenario]);
 
   const reset = () => {
     setScenario(createExampleScenario());
@@ -131,9 +124,9 @@ export default function Home() {
                 scenario={scenario}
                 setScenario={setScenario}
                 baselineUsage={baselineUsage}
-                leanestUsage={leanestResult.resourceUsage}
+                leanestUsage={stage1.leanest.programResourceUsage}
                 statusQuoCost={stage1.baseline.result.annualizedCost}
-                leanestCost={leanestResult.annualizedCost}
+                leanestCost={stage1.leanest.programAnnualizedCost}
               />
             }
           />
