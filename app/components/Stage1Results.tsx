@@ -151,7 +151,11 @@ function FinalistCard({
   objectiveLabel: string;
   nameOf: (id: string) => string;
 }) {
-  const usage = bundle.result.resourceUsage;
+  // Program-borne figures, not totals: these are the numbers the reader checks
+  // against the ceilings they set, and the ceilings are tested on what the
+  // program itself bears. Showing totals here reported a breach on a card the
+  // optimizer had (correctly) ruled feasible.
+  const usage = bundle.result.programResourceUsage;
   return (
     <article className={`finalist-card${isBest ? " cheapest" : ""}`}>
       <div className="finalist-top">
@@ -168,7 +172,7 @@ function FinalistCard({
       <div className="finalist-metrics">
         <div className={objective === "cost" ? "objective-metric" : undefined}>
           <small>Annualized cost</small>
-          <strong>{money(bundle.result.annualizedCost)}</strong>
+          <strong>{money(bundle.result.programAnnualizedCost)}</strong>
         </div>
         <div>
           <small>Annual savings</small>

@@ -158,7 +158,7 @@ export function SensitivityView({
                 </p>
                 <dl className="inspector-working">
                   <div>
-                    <dt>Shared-service cost, this scenario</dt>
+                    <dt>Total annual cost, this scenario</dt>
                     <dd>{money(activeCell.annualCost)}/yr</dd>
                   </div>
                   <div>

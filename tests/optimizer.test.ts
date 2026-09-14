@@ -13,16 +13,44 @@ test("returns an all-separate baseline and feasible merge finalists ranked by an
   assert.ok(stage1.finalists.length >= 2 && stage1.finalists.length <= 3);
 
   // Finalists are sorted cheapest-first and every finalist is feasible and merges something.
+  // Ranking is on the program-borne figure, so that is what monotonicity is
+  // asserted on: the total differs by whatever is shifted to the country, and
+  // flagging another category government-funded would break that offset.
   for (let i = 1; i < stage1.finalists.length; i += 1) {
     assert.ok(
-      stage1.finalists[i - 1].result.annualizedCost <=
-        stage1.finalists[i].result.annualizedCost,
+      stage1.finalists[i - 1].result.programAnnualizedCost <=
+        stage1.finalists[i].result.programAnnualizedCost,
     );
   }
   for (const finalist of stage1.finalists) {
     assert.equal(finalist.result.feasible, true);
     assert.ok(finalist.mergedCategoryIds.length > 0);
   }
+});
+
+test("the ranked figure is the one the ceilings test, not the total", () => {
+  // Regression guard for a UI that read the totals: the top finalist's total
+  // field-days exceed the ceiling while the program-borne draw — the figure
+  // feasibility is actually decided on — sits under it. Any panel that shows a
+  // number beside a ceiling must show the program-borne one.
+  const scenario = createExampleScenario();
+  const stage1 = runStage1(scenario, "cost");
+  const top = stage1.finalists[0];
+  const ceilings = scenario.constraints.resourceCeilings;
+
+  for (const resource of RESOURCE_TYPES) {
+    assert.ok(
+      top.result.programResourceUsage[resource.id] <= ceilings[resource.id],
+      `${resource.label}: program draw must be within its ceiling`,
+    );
+  }
+
+  assert.ok(
+    RESOURCE_TYPES.some(
+      (resource) => top.result.resourceUsage[resource.id] > ceilings[resource.id],
+    ),
+    "the totals must breach at least one ceiling, or this fixture no longer separates the two",
+  );
 });
 
 test("optimizing on a resource ranks by that resource and reorders the shortlist", () => {
@@ -33,8 +61,8 @@ test("optimizing on a resource ranks by that resource and reorders the shortlist
   // Staff-hours finalists are sorted by staff-hours ascending.
   for (let i = 1; i < byStaff.finalists.length; i += 1) {
     assert.ok(
-      byStaff.finalists[i - 1].result.resourceUsage.staffHours <=
-        byStaff.finalists[i].result.resourceUsage.staffHours,
+      byStaff.finalists[i - 1].result.programResourceUsage.staffHours <=
+        byStaff.finalists[i].result.programResourceUsage.staffHours,
     );
   }
 

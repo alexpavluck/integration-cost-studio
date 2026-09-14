@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { RESOURCE_TYPES, type Scenario } from "../../lib/model.ts";
+import type { PlanComparison } from "../../lib/optimizer.ts";
 import { money } from "../../lib/format.ts";
 import {
   addCategory,
@@ -20,14 +21,23 @@ import { NumberInput, TextInput } from "./ui.tsx";
 export function DataEntry({
   scenario,
   setScenario,
+  comparison,
   middleSlot,
 }: {
   scenario: Scenario;
   setScenario: (next: Scenario) => void;
+  /**
+   * The optimizer's view of the current plan. Surfaced here so its disagreement
+   * with the user is visible while they are still editing inputs, rather than
+   * only after they walk to the analysis step.
+   */
+  comparison: PlanComparison;
   /** Rendered between the programs card and the component categories. */
   middleSlot?: ReactNode;
 }) {
   const { programs, categories } = scenario;
+  const wouldAdd = new Set(comparison.add.map((change) => change.id));
+  const wouldDrop = new Set(comparison.drop.map((change) => change.id));
 
   return (
     <div className="screen">
@@ -97,6 +107,12 @@ export function DataEntry({
                   value={category.name}
                   onChange={(value) => setScenario(updateCategory(scenario, category.id, { name: value }))}
                 />
+                {wouldAdd.has(category.id) ? (
+                  <span className="model-hint">model suggests integrating</span>
+                ) : null}
+                {wouldDrop.has(category.id) ? (
+                  <span className="model-hint">model suggests keeping separate</span>
+                ) : null}
                 <div className="category-flags">
                   <label className={`shareable-toggle${category.canIntegrate ? " on" : ""}`}>
                     <input

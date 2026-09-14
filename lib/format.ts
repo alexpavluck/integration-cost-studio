@@ -9,7 +9,7 @@ export function money(value: number, compact = false): string {
   return `$${rounded.toLocaleString()}`;
 }
 
-/** Signed money, e.g. "+$120k" / "−$40k" (true minus sign, not a hyphen). */
+/** Signed money, e.g. "+$120,000" / "−$40,000" (true minus sign, not a hyphen). */
 export function signedMoney(value: number, compact = false): string {
   const sign = value >= 0 ? "+" : "−";
   return `${sign}${money(Math.abs(value), compact)}`;

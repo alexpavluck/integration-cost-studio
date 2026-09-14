@@ -119,6 +119,7 @@ export default function Home() {
           <DataEntry
             scenario={scenario}
             setScenario={setScenario}
+            comparison={comparison}
             middleSlot={
               <ConstraintSetup
                 scenario={scenario}

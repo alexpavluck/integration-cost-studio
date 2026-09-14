@@ -426,6 +426,20 @@ footer {
   border-bottom-color: var(--teal);
 }
 
+/* The optimizer disagreeing with the plan is a hint, not an alarm: it sits
+   quietly beside the name so it reads while editing without demanding action. */
+.model-hint {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--mint);
+  border: 1px solid var(--line);
+  color: var(--teal);
+  white-space: nowrap;
+}
+
 .shareable-toggle,
 .plan-toggle {
   display: inline-flex;
