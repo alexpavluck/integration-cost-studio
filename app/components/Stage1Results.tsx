@@ -17,6 +17,8 @@ export function Stage1Results({
   onObjectiveChange,
   comparison,
   onAdopt,
+  selectedFinalistId,
+  onSelectFinalist,
 }: {
   scenario: Scenario;
   stage1: Stage1Output;
@@ -24,7 +26,12 @@ export function Stage1Results({
   onObjectiveChange: (objective: Objective) => void;
   comparison: PlanComparison;
   onAdopt: (mergedCategoryIds: string[]) => void;
+  selectedFinalistId: string | null;
+  onSelectFinalist: (id: string) => void;
 }) {
+  // Stage 2 defaults to the first finalist when nothing is picked, so the cards
+  // must show that same default or the two screens disagree about what is selected.
+  const activeFinalistId = selectedFinalistId ?? stage1.finalists[0]?.id ?? null;
   const nameOf = (id: string) =>
     scenario.categories.find((c) => c.id === id)?.name ?? id;
   const objectiveLabel =
@@ -42,7 +49,8 @@ export function Stage1Results({
           {stage1.infeasibleCount > 0 ? ` (${stage1.infeasibleCount} excluded by constraints)` : ""},
           these are the best on <strong>{objectiveLabel.toLowerCase()}</strong> that merge
           something. Treat them as <strong>finalists, not the answer</strong> —
-          Stage 2 stress-tests their cost robustness.
+          Stage 2 stress-tests their cost robustness. Pick one to stress-test
+          below.
         </p>
       </div>
 
@@ -129,6 +137,8 @@ export function Stage1Results({
             objective={objective}
             objectiveLabel={objectiveLabel}
             nameOf={nameOf}
+            isSelected={bundle.id === activeFinalistId}
+            onSelect={() => onSelectFinalist(bundle.id)}
           />
         ))}
       </div>
@@ -143,6 +153,8 @@ function FinalistCard({
   objective,
   objectiveLabel,
   nameOf,
+  isSelected,
+  onSelect,
 }: {
   bundle: Bundle;
   rank: number;
@@ -150,6 +162,8 @@ function FinalistCard({
   objective: Objective;
   objectiveLabel: string;
   nameOf: (id: string) => string;
+  isSelected: boolean;
+  onSelect: () => void;
 }) {
   // Program-borne figures, not totals: these are the numbers the reader checks
   // against the ceilings they set, and the ceilings are tested on what the
@@ -157,10 +171,25 @@ function FinalistCard({
   // optimizer had (correctly) ruled feasible.
   const usage = bundle.result.programResourceUsage;
   return (
-    <article className={`finalist-card${isBest ? " cheapest" : ""}`}>
+    <article
+      className={`finalist-card${isBest ? " cheapest" : ""}${isSelected ? " selected" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        // role="button" carries no built-in key handling, so Enter and Space
+        // have to be wired up by hand to keep the card keyboard-reachable.
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+    >
       <div className="finalist-top">
         <span className="finalist-rank">#{rank}</span>
         {isBest ? <span className="cheapest-tag">Best on {objectiveLabel.toLowerCase()}</span> : null}
+        {isSelected ? <span className="selected-tag">Stress-testing below</span> : null}
       </div>
       <div className="finalist-chips">
         {bundle.mergedCategoryIds.map((id) => (
