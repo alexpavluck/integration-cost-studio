@@ -1597,3 +1597,12 @@ footer p {
 .plan-diff .drop .diff-mark { color: var(--warning); }
 .merge-chip.muted { opacity: 0.6; }
 .plan-agree { color: var(--muted); margin: 1rem 0 0; }
+
+.axis-note { color: var(--muted); font-size: 0.85rem; margin: 0.75rem 0 0; max-width: 46ch; }
+.inspector-working { margin: 0.5rem 0 0; display: grid; gap: 0.35rem; }
+.inspector-working > div { display: flex; justify-content: space-between; gap: 1rem; }
+.inspector-working dt { color: var(--muted); font-size: 0.85rem; }
+.inspector-working dd { margin: 0; font-variant-numeric: tabular-nums; }
+.inspector-working .inspector-total { border-top: 1px solid var(--line); padding-top: 0.35rem; font-weight: 600; }
+.shortfall-note { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 0.85rem; }
+.shortfall-note p { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.88rem; }

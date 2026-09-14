@@ -71,6 +71,8 @@ export type BundleRobustness = {
 export type Stage2Output = {
   grid: GridConfig;
   horizonYears: number;
+  /** All-separate annual cost — the reference every cell's saving is measured against. */
+  baselineAnnualCost: number;
   perBundle: BundleRobustness[];
   /** Finalist with the smallest worst-case shortfall — the robust pick. */
   recommendedBundleId: string | null;
@@ -205,6 +207,12 @@ export function runStage2(
         };
       }
     }
+    // An empty grid never entered the loop above, so the -Infinity sentinel
+    // would otherwise escape and, being less than every real value, make this
+    // bundle win the recommendation unconditionally.
+    if (cells.length === 0) {
+      worstShortfall = { ...worstShortfall, amount: 0 };
+    }
     return { bundle, cells, summary: summarize(cells), worstShortfall };
   });
 
@@ -241,6 +249,7 @@ export function runStage2(
   return {
     grid,
     horizonYears,
+    baselineAnnualCost: baselineAnnual,
     perBundle,
     recommendedBundleId,
     maximinBundleId,
