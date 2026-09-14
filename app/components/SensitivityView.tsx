@@ -111,7 +111,7 @@ export function SensitivityView({
           <div className="axis-label axis-x">Transition cost →</div>
           <p className="axis-note">
             A position on either axis moves every merged category along{" "}
-            <em>its own</em> entered low-to-high range — so &ldquo;High +50%&rdquo; shifts a
+            <em>its own</em>{" "}entered low-to-high range — so &ldquo;High +50%&rdquo; shifts a
             category with a wide range much further than one with a narrow range.
             The centre cell is every cost at your best estimate.
           </p>
@@ -134,18 +134,28 @@ export function SensitivityView({
 
           <div className="shortfall-note">
             <span className="inspector-title">Where the shortfall comes from</span>
-            <p>
-              At {fractionLabel(selected.worstShortfall.integratedFraction)} integrated cost
-              and {fractionLabel(selected.worstShortfall.transitionFraction)} transition cost,
-              this option nets {signedMoney(selected.worstShortfall.ownNetSavings)} while{" "}
-              <strong>
-                {stage2.perBundle.find((e) => e.bundle.id === selected.worstShortfall.bestBundleId)
-                  ?.bundle.label ?? "another option"}
-              </strong>{" "}
-              nets {signedMoney(selected.worstShortfall.bestNetSavings)} — a gap of{" "}
-              {money(selected.worstShortfall.amount)}. That is the widest this option
-              ever falls behind, which is why it is the number we rank on.
-            </p>
+            {selected.worstShortfall.amount > 0 ? (
+              <p>
+                At {fractionLabel(selected.worstShortfall.integratedFraction)} integrated cost
+                and {fractionLabel(selected.worstShortfall.transitionFraction)} transition cost,
+                this option nets {signedMoney(selected.worstShortfall.ownNetSavings)} while{" "}
+                <strong>
+                  {stage2.perBundle.find((e) => e.bundle.id === selected.worstShortfall.bestBundleId)
+                    ?.bundle.label ?? "another option"}
+                </strong>{" "}
+                nets {signedMoney(selected.worstShortfall.bestNetSavings)} — a gap of{" "}
+                {money(selected.worstShortfall.amount)}. That is the widest this option
+                ever falls behind, which is why it is the number we rank on.
+              </p>
+            ) : (
+              // A bundle that wins every cell is its own "best option", so the comparison
+              // sentence would read as this option losing to itself by $0.
+              <p>
+                No other option beats this one anywhere on the grid, so it never falls behind
+                at all. That is why it is the recommended pick — however the costs turn out,
+                nothing else on the shortlist does better.
+              </p>
+            )}
           </div>
 
           <div className="cell-inspector">
