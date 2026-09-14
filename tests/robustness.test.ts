@@ -35,7 +35,7 @@ test("each finalist gets a full grid of cells with a central point-estimate cell
   }
 });
 
-test("the point-estimate winner is the all-shareable-merged bundle", () => {
+test("the point-estimate winner is the all-integrable-merged bundle", () => {
   const scenario = createExampleScenario();
   const stage1 = runStage1(scenario);
   const stage2 = runStage2(scenario, stage1.finalists);

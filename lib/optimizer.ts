@@ -1,13 +1,13 @@
 // Stage 1 — shortlisting optimizer.
 //
-// Cost is the SOLE objective (spec §3/§4). Resource ceilings and non-negotiable
-// (non-shareable) categories are hard constraints — never folded into a weighted
+// Cost is the SOLE objective (spec §3/§4). Resource ceilings and categories
+// policy forbids integrating are hard constraints — never folded into a weighted
 // score. The output is a shortlist of "plausible finalists," not a
 // recommendation; the robust choice among them is decided in Stage 2
 // (lib/robustness.ts).
 //
-// Because the decision is one binary per shareable category, the whole space is
-// 2^k selections for k shareable categories. At realistic scale (k ≲ 10) that is
+// Because the decision is one binary per integrable category, the whole space is
+// 2^k selections for k integrable categories. At realistic scale (k ≲ 10) that is
 // ≤1024 evaluations — instant to brute-force and fully transparent, so no MIP
 // solver is needed.
 
@@ -34,11 +34,15 @@ export const OBJECTIVES = [
 
 export type Objective = (typeof OBJECTIVES)[number]["id"];
 
-/** The value a given objective minimizes for an evaluated arrangement. */
+/**
+ * The value a given objective minimizes. These are the program's own figures,
+ * matching what the ceilings constrain — optimizing a total while capping a
+ * program figure would recommend arrangements the constraints then reject.
+ */
 export function objectiveValue(result: EngineResult, objective: Objective): number {
   return objective === "cost"
-    ? result.annualizedCost
-    : result.resourceUsage[objective];
+    ? result.programAnnualizedCost
+    : result.programResourceUsage[objective];
 }
 
 export type Bundle = {
@@ -74,6 +78,8 @@ export type Stage1Output = {
   infeasibleCount: number;
   /** Every feasible bundle ranked by annualized cost (baseline included). */
   ranked: Bundle[];
+  /** The arrangement implied by the user's `plannedIntegration` flags. */
+  userPlan: Bundle;
 };
 
 function subsets<T>(items: T[]): T[][] {
@@ -128,7 +134,7 @@ function toBundle(
 }
 
 /**
- * Enumerate every merge selection over the shareable categories, keep the
+ * Enumerate every merge selection over the integrable categories, keep the
  * feasible ones, and return the all-standalone baseline plus the top
  * `finalistCount` feasible merge bundles by the chosen objective. Ties break on
  * annualized cost so the ordering is stable and cost-sensible.
@@ -139,11 +145,11 @@ export function runStage1(
   finalistCount = 3,
 ): Stage1Output {
   const baselineAnnual = baselineAnnualCost(scenario);
-  const shareableIds = scenario.categories
-    .filter((category) => category.shareable)
+  const candidateIds = scenario.categories
+    .filter((category) => category.canIntegrate)
     .map((category) => category.id);
 
-  const allBundles = subsets(shareableIds).map((mergedIds) =>
+  const allBundles = subsets(candidateIds).map((mergedIds) =>
     toBundle(scenario, mergedIds, baselineAnnual),
   );
 
@@ -165,11 +171,19 @@ export function runStage1(
     .filter((bundle) => bundle.mergedCategoryIds.length > 0)
     .slice(0, finalistCount);
 
+  const plannedIds = scenario.categories
+    .filter((category) => category.canIntegrate && category.plannedIntegration)
+    .map((category) => category.id);
+  const userPlan =
+    allBundles.find((bundle) => bundle.id === bundleId(plannedIds)) ??
+    toBundle(scenario, plannedIds, baselineAnnual);
+
   return {
     baseline,
     finalists,
     feasibleCount: feasible.length,
     infeasibleCount,
     ranked,
+    userPlan,
   };
 }

@@ -41,11 +41,17 @@ export type Category = {
   id: string;
   name: string;
   /**
-   * Hard flag (spec §3). `false` ⇒ the category can never merge regardless of
-   * cost logic (e.g. drug-specific safety monitoring) and is excluded from the
-   * optimizer's decision variables entirely.
+   * Policy, not preference. `false` ⇒ the category can never merge regardless of
+   * what the numbers say (e.g. drug-specific safety monitoring), so it is excluded
+   * from the optimizer's decision variables entirely.
    */
-  shareable: boolean;
+  canIntegrate: boolean;
+  /**
+   * The user's current proposal. This does NOT constrain the optimizer — it is the
+   * plan the optimizer's recommendation is compared against, so the tool can say
+   * "you didn't mark this, but it's the best move for what you're optimizing."
+   */
+  plannedIntegration: boolean;
   /**
    * When this category is merged, is the shared instance funded by the country /
    * health system rather than the program? If so, its integrated cost moves off
@@ -145,7 +151,8 @@ export function createExampleScenario(): Scenario {
   const category = (
     id: string,
     name: string,
-    shareable: boolean,
+    canIntegrate: boolean,
+    plannedIntegration: boolean,
     perProgram: Record<ProgramId, ProgramEntry>,
     integratedCost: CostRange,
     transitionCost: CostRange,
@@ -154,12 +161,13 @@ export function createExampleScenario(): Scenario {
   ): Category => ({
     id,
     name,
-    shareable,
-    governmentFunded,
+    canIntegrate,
+    plannedIntegration,
     perProgram,
     integratedCost,
     transitionCost,
     integratedResourceDraw,
+    governmentFunded,
   });
 
   const entry = (
@@ -171,6 +179,7 @@ export function createExampleScenario(): Scenario {
     category(
       "training",
       "Training",
+      true,
       true,
       {
         mda: entry(150000, { staffHours: 400, vehicleDays: 20, fieldDays: 30 }),
@@ -184,6 +193,7 @@ export function createExampleScenario(): Scenario {
       "transport",
       "Transportation",
       true,
+      true,
       {
         mda: entry(210000, { staffHours: 200, vehicleDays: 120, fieldDays: 60 }),
         eye: entry(180000, { staffHours: 180, vehicleDays: 100, fieldDays: 50 }),
@@ -196,6 +206,7 @@ export function createExampleScenario(): Scenario {
       "distribution",
       "Distribution",
       true,
+      false, // can integrate, but the user has not proposed it
       {
         mda: entry(240000, { staffHours: 500, vehicleDays: 80, fieldDays: 90 }),
         eye: entry(200000, { staffHours: 440, vehicleDays: 70, fieldDays: 80 }),
@@ -211,6 +222,7 @@ export function createExampleScenario(): Scenario {
       "supervision",
       "Supervision",
       true,
+      true,
       {
         mda: entry(160000, { staffHours: 300, vehicleDays: 60, fieldDays: 70 }),
         eye: entry(140000, { staffHours: 270, vehicleDays: 54, fieldDays: 62 }),
@@ -222,6 +234,7 @@ export function createExampleScenario(): Scenario {
     category(
       "data",
       "Data & M&E",
+      true,
       true,
       {
         mda: entry(110000, { staffHours: 250, vehicleDays: 10, fieldDays: 20 }),
@@ -236,6 +249,7 @@ export function createExampleScenario(): Scenario {
       "safety",
       "Drug safety monitoring",
       false, // non-negotiable: drug-specific, can never merge (spec §1, §3)
+      false,
       {
         mda: entry(90000, { staffHours: 150, vehicleDays: 15, fieldDays: 25 }),
         eye: entry(70000, { staffHours: 120, vehicleDays: 12, fieldDays: 20 }),

@@ -52,7 +52,7 @@ test("the default objective is cost (backwards compatible)", () => {
   );
 });
 
-test("the non-shareable category never appears in any finalist bundle", () => {
+test("the category that cannot integrate never appears in any finalist bundle", () => {
   const scenario = createExampleScenario();
   const stage1 = runStage1(scenario);
   for (const bundle of stage1.ranked) {
@@ -60,15 +60,15 @@ test("the non-shareable category never appears in any finalist bundle", () => {
   }
 });
 
-test("enumerates 2^k feasible bundles over shareable categories only", () => {
+test("enumerates 2^k feasible bundles over integrable categories only", () => {
   const scenario = createExampleScenario();
   const stage1 = runStage1(scenario);
-  // 5 shareable categories → 32 selections, all feasible under the roomy example ceilings.
+  // 5 integrable categories → 32 selections, all feasible under the roomy example ceilings.
   assert.equal(stage1.feasibleCount + stage1.infeasibleCount, 32);
   assert.equal(stage1.infeasibleCount, 0);
 });
 
-test("the cheapest finalist merges everything shareable at the point estimate", () => {
+test("the cheapest finalist merges everything integrable at the point estimate", () => {
   const scenario = createExampleScenario();
   const stage1 = runStage1(scenario);
   assert.equal(stage1.finalists[0].mergedCategoryIds.length, 5);
@@ -98,4 +98,39 @@ test("a status quo that breaches a ceiling is flagged, while merges that relieve
   for (const finalist of stage1.finalists) {
     assert.equal(finalist.result.feasible, true);
   }
+});
+
+test("a category the user did not plan to integrate can still win", () => {
+  const scenario = createExampleScenario();
+  const unplanned = scenario.categories.find(
+    (c) => c.canIntegrate && !c.plannedIntegration,
+  );
+  assert.ok(unplanned, "fixture must have a category that can integrate but is unplanned");
+
+  const stage1 = runStage1(scenario, "cost");
+  const consideredEverywhere = stage1.ranked.some((bundle) =>
+    bundle.mergedCategoryIds.includes(unplanned!.id),
+  );
+  assert.ok(consideredEverywhere, "optimizer must consider unplanned categories");
+});
+
+test("a category that cannot integrate never appears in any bundle", () => {
+  const scenario = createExampleScenario();
+  const blocked = scenario.categories.find((c) => !c.canIntegrate)!;
+  for (const bundle of runStage1(scenario, "cost").ranked) {
+    assert.ok(!bundle.mergedCategoryIds.includes(blocked.id));
+  }
+});
+
+test("userPlan reflects plannedIntegration and is evaluated like any bundle", () => {
+  const scenario = createExampleScenario();
+  const expected = scenario.categories
+    .filter((c) => c.canIntegrate && c.plannedIntegration)
+    .map((c) => c.id)
+    .sort();
+
+  const { userPlan } = runStage1(scenario, "cost");
+  assert.deepEqual(userPlan.mergedCategoryIds, expected);
+  assert.equal(typeof userPlan.result.feasible, "boolean");
+  assert.equal(typeof userPlan.result.programAnnualizedCost, "number");
 });

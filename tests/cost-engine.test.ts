@@ -32,7 +32,8 @@ function makeScenario(overrides?: {
   const categoryA: Category = {
     id: "a",
     name: "Category A",
-    shareable: true,
+    canIntegrate: true,
+    plannedIntegration: true,
     governmentFunded: overrides?.governmentFundedA ?? false,
     perProgram: {
       p1: entry(100, draw(10, 1, 1)),
@@ -45,7 +46,8 @@ function makeScenario(overrides?: {
   const categoryB: Category = {
     id: "b",
     name: "Category B",
-    shareable: false, // non-negotiable
+    canIntegrate: false, // non-negotiable
+    plannedIntegration: false,
     governmentFunded: false,
     perProgram: {
       p1: entry(40, draw(5, 0, 1)),
@@ -110,7 +112,7 @@ test("government-funded merges shift cost from program to country, leaving the t
   assert.equal(gov.countryAnnualCost, 150);
 });
 
-test("a non-shareable category is never treated as merged even if selected", () => {
+test("a category that cannot integrate is never treated as merged even if selected", () => {
   const scenario = makeScenario();
   assert.equal(isMerged(scenario.categories[1], new Set(["b"])), false);
   const result = evaluateSelection(scenario, new Set(["b"]));

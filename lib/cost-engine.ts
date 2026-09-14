@@ -63,9 +63,9 @@ export type EngineResult = {
   violations: string[];
 };
 
-/** A category counts as merged only if it is both selected and shareable. */
+/** A category counts as merged only if policy allows it and it is selected. */
 export function isMerged(category: Category, selection: MergeSelection): boolean {
-  return category.shareable && selection.has(category.id);
+  return category.canIntegrate && selection.has(category.id);
 }
 
 function standaloneAnnualCost(category: Category): number {
