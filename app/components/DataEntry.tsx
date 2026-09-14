@@ -97,16 +97,40 @@ export function DataEntry({
                   value={category.name}
                   onChange={(value) => setScenario(updateCategory(scenario, category.id, { name: value }))}
                 />
-                <label className={`shareable-toggle${category.shareable ? " on" : ""}`}>
-                  <input
-                    type="checkbox"
-                    checked={category.shareable}
-                    onChange={(event) =>
-                      setScenario(updateCategory(scenario, category.id, { shareable: event.target.checked }))
-                    }
-                  />
-                  <span>{category.shareable ? "Integrated" : "Remain separate"}</span>
-                </label>
+                <div className="category-flags">
+                  <label className={`shareable-toggle${category.canIntegrate ? " on" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={category.canIntegrate}
+                      onChange={(event) =>
+                        setScenario(
+                          updateCategory(scenario, category.id, {
+                            canIntegrate: event.target.checked,
+                            plannedIntegration: event.target.checked && category.plannedIntegration,
+                          }),
+                        )
+                      }
+                    />
+                    <span>{category.canIntegrate ? "Can be integrated" : "Never integrate"}</span>
+                  </label>
+                  <label
+                    className={`plan-toggle${category.plannedIntegration ? " on" : ""}${category.canIntegrate ? "" : " disabled"}`}
+                  >
+                    <input
+                      type="checkbox"
+                      disabled={!category.canIntegrate}
+                      checked={category.plannedIntegration}
+                      onChange={(event) =>
+                        setScenario(
+                          updateCategory(scenario, category.id, {
+                            plannedIntegration: event.target.checked,
+                          }),
+                        )
+                      }
+                    />
+                    <span>In my plan</span>
+                  </label>
+                </div>
                 {categories.length > 1 ? (
                   <button
                     className="remove-button"
@@ -164,7 +188,7 @@ export function DataEntry({
                 </table>
               </div>
 
-              {category.shareable ? (
+              {category.canIntegrate ? (
                 <div className="merged-estimates">
                   <p className="merged-lead">
                     If merged into one shared instance (combined standalone today:{" "}

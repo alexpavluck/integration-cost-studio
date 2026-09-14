@@ -17,7 +17,7 @@ export function ConstraintSetup({
   setScenario: (next: Scenario) => void;
   /** Resource draw of the all-standalone status quo. */
   baselineUsage: ResourceDraw;
-  /** Resource draw of the leanest (all-shareable-merged) arrangement. */
+  /** Resource draw of the leanest (all-integrable-merged) arrangement. */
   leanestUsage: ResourceDraw;
   /** Annualized cost of the status quo (its default funding envelope). */
   statusQuoCost: number;

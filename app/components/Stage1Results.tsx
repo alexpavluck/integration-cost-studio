@@ -1,7 +1,13 @@
 "use client";
 
 import { money, paybackLabel, signedMoney } from "../../lib/format.ts";
-import { OBJECTIVES, type Bundle, type Objective, type Stage1Output } from "../../lib/optimizer.ts";
+import {
+  OBJECTIVES,
+  type Bundle,
+  type Objective,
+  type PlanComparison,
+  type Stage1Output,
+} from "../../lib/optimizer.ts";
 import { RESOURCE_TYPES, type Scenario } from "../../lib/model.ts";
 
 export function Stage1Results({
@@ -9,11 +15,15 @@ export function Stage1Results({
   stage1,
   objective,
   onObjectiveChange,
+  comparison,
+  onAdopt,
 }: {
   scenario: Scenario;
   stage1: Stage1Output;
   objective: Objective;
   onObjectiveChange: (objective: Objective) => void;
+  comparison: PlanComparison;
+  onAdopt: (mergedCategoryIds: string[]) => void;
 }) {
   const nameOf = (id: string) =>
     scenario.categories.find((c) => c.id === id)?.name ?? id;
@@ -64,6 +74,50 @@ export function Stage1Results({
           <span className="ok-pill">Reference baseline</span>
         )}
       </div>
+
+      {comparison.best ? (
+        <section className="plan-compare">
+          <div className="plan-compare-head">
+            <h3>Your plan vs. the best option</h3>
+            <p>
+              Measured on <strong>{objectiveLabel.toLowerCase()}</strong>. Your plan is
+              whatever you ticked as &ldquo;in my plan&rdquo;; the optimizer searched every
+              arrangement policy allows.
+            </p>
+          </div>
+          <div className="plan-compare-cols">
+            <PlanColumn title="Your plan" bundle={comparison.userPlan} objective={objective} nameOf={nameOf} />
+            <PlanColumn title={`Best on ${objectiveLabel.toLowerCase()}`} bundle={comparison.best} objective={objective} nameOf={nameOf} highlight />
+          </div>
+          {comparison.add.length || comparison.drop.length ? (
+            <>
+              <ul className="plan-diff">
+                {comparison.add.map((change) => (
+                  <li key={change.id} className="add">
+                    <span className="diff-mark">+</span> Add <strong>{change.name}</strong>
+                    <em>{formatObjectiveDelta(change.objectiveDelta, objective)}</em>
+                  </li>
+                ))}
+                {comparison.drop.map((change) => (
+                  <li key={change.id} className="drop">
+                    <span className="diff-mark">−</span> Drop <strong>{change.name}</strong>
+                    <em>{formatObjectiveDelta(change.objectiveDelta, objective)}</em>
+                  </li>
+                ))}
+              </ul>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => onAdopt(comparison.best!.mergedCategoryIds)}
+              >
+                Adopt this plan
+              </button>
+            </>
+          ) : (
+            <p className="plan-agree">Your plan already is the best option on this measure.</p>
+          )}
+        </section>
+      ) : null}
 
       <div className="finalist-grid">
         {stage1.finalists.map((bundle, index) => (
@@ -168,5 +222,48 @@ function FinalistCard({
         {bundle.mergedCategoryIds.length === 1 ? "" : "s"}
       </div>
     </article>
+  );
+}
+
+function formatObjectiveDelta(delta: number, objective: Objective): string {
+  if (objective === "cost") return signedMoney(delta);
+  const unit = OBJECTIVES.find((o) => o.id === objective)?.unit ?? "";
+  return `${delta >= 0 ? "+" : "−"}${Math.abs(Math.round(delta)).toLocaleString()} ${unit}`;
+}
+
+function PlanColumn({
+  title,
+  bundle,
+  objective,
+  nameOf,
+  highlight = false,
+}: {
+  title: string;
+  bundle: Bundle;
+  objective: Objective;
+  nameOf: (id: string) => string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={`plan-col${highlight ? " highlight" : ""}`}>
+      <span className="plan-col-title">{title}</span>
+      <strong className="plan-col-value">
+        {objective === "cost"
+          ? money(bundle.result.programAnnualizedCost)
+          : `${Math.round(bundle.result.programResourceUsage[objective]).toLocaleString()}`}
+      </strong>
+      <div className="finalist-chips">
+        {bundle.mergedCategoryIds.length ? (
+          bundle.mergedCategoryIds.map((id) => (
+            <span className="merge-chip" key={id}>{nameOf(id)}</span>
+          ))
+        ) : (
+          <span className="merge-chip muted">Nothing merged</span>
+        )}
+      </div>
+      {!bundle.result.feasible ? (
+        <span className="warn-pill">Breaches a constraint</span>
+      ) : null}
+    </div>
   );
 }

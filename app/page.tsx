@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { createExampleScenario, type Scenario } from "../lib/model.ts";
 import { evaluateSelection } from "../lib/cost-engine.ts";
-import { runStage1, type Objective } from "../lib/optimizer.ts";
+import { comparePlanToBest, runStage1, type Objective } from "../lib/optimizer.ts";
 import { runStage2 } from "../lib/robustness.ts";
 import { buildShareUrl, readStateFromHash } from "../lib/share.ts";
+import { setPlannedIntegration } from "../lib/scenario-edits.ts";
 import { DataEntry } from "./components/DataEntry.tsx";
 import { ConstraintSetup } from "./components/ConstraintSetup.tsx";
 import { Stage1Results } from "./components/Stage1Results.tsx";
@@ -39,6 +40,10 @@ export default function Home() {
   }, []);
 
   const stage1 = useMemo(() => runStage1(scenario, objective), [scenario, objective]);
+  const comparison = useMemo(
+    () => comparePlanToBest(scenario, stage1),
+    [scenario, stage1],
+  );
   const stage2 = useMemo(
     () => runStage2(scenario, stage1.finalists),
     [scenario, stage1.finalists],
@@ -46,10 +51,10 @@ export default function Home() {
 
   const baselineUsage = stage1.baseline.result.resourceUsage;
   const leanestResult = useMemo(() => {
-    const shareable = new Set(
-      scenario.categories.filter((c) => c.shareable).map((c) => c.id),
+    const integrable = new Set(
+      scenario.categories.filter((c) => c.canIntegrate).map((c) => c.id),
     );
-    return evaluateSelection(scenario, shareable);
+    return evaluateSelection(scenario, integrable);
   }, [scenario]);
 
   const reset = () => {
@@ -64,7 +69,7 @@ export default function Home() {
     const url = buildShareUrl(
       window.location.origin,
       window.location.pathname,
-      { v: 1, scenario, objective },
+      { v: 2, scenario, objective },
     );
     // Reflect the link in the address bar either way, so it's recoverable even
     // if the clipboard is blocked (e.g. an embedded browser without permission).
@@ -140,6 +145,8 @@ export default function Home() {
               stage1={stage1}
               objective={objective}
               onObjectiveChange={setObjective}
+              comparison={comparison}
+              onAdopt={(ids) => setScenario(setPlannedIntegration(scenario, ids))}
             />
             <SensitivityView
               stage2={stage2}

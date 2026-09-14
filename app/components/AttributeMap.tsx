@@ -63,7 +63,7 @@ export function AttributeMap({
     1,
     ...categories.flatMap((c) => [
       ...programs.map((p) => c.perProgram[p.id]?.standaloneCost ?? 0),
-      c.shareable ? c.integratedCost.point : 0,
+      c.canIntegrate ? c.integratedCost.point : 0,
     ]),
   );
 
@@ -194,7 +194,7 @@ export function AttributeMap({
           <li key={c.id}>
             <span className="attr-legend-n">{numberOf.get(c.id)}</span>
             {c.name}
-            {!c.shareable ? <em> · never merges</em> : null}
+            {!c.canIntegrate ? <em> · never merges</em> : null}
           </li>
         ))}
       </ol>
