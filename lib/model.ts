@@ -31,7 +31,7 @@ export type ProgramId = string;
 
 /** One program's own (standalone) instance of a category. */
 export type ProgramEntry = {
-  /** Annual cost ($k) of this program running the category on its own. */
+  /** Annual cost of this program running the category on its own. */
   standaloneCost: number;
   /** Resources this standalone instance consumes per year. */
   resourceDraw: ResourceDraw;
@@ -41,11 +41,17 @@ export type Category = {
   id: string;
   name: string;
   /**
-   * Hard flag (spec §3). `false` ⇒ the category can never merge regardless of
-   * cost logic (e.g. drug-specific safety monitoring) and is excluded from the
-   * optimizer's decision variables entirely.
+   * Policy, not preference. `false` ⇒ the category can never merge regardless of
+   * what the numbers say (e.g. drug-specific safety monitoring), so it is excluded
+   * from the optimizer's decision variables entirely.
    */
-  shareable: boolean;
+  canIntegrate: boolean;
+  /**
+   * The user's current proposal. This does NOT constrain the optimizer — it is the
+   * plan the optimizer's recommendation is compared against, so the tool can say
+   * "you didn't mark this, but it's the best move for what you're optimizing."
+   */
+  plannedIntegration: boolean;
   /**
    * When this category is merged, is the shared instance funded by the country /
    * health system rather than the program? If so, its integrated cost moves off
@@ -55,9 +61,9 @@ export type Category = {
   governmentFunded: boolean;
   /** Per-program standalone entries, keyed by program id. */
   perProgram: Record<ProgramId, ProgramEntry>;
-  /** Annual cost ($k) of a single shared instance once merged. */
+  /** Annual cost of a single shared instance once merged. */
   integratedCost: CostRange;
-  /** One-time cost ($k) to stand up the merge. */
+  /** One-time cost to stand up the merge. */
   transitionCost: CostRange;
   /** Resources the single shared instance consumes per year. */
   integratedResourceDraw: ResourceDraw;
@@ -72,7 +78,7 @@ export type Constraints = {
   /** Maximum available per resource type per year (hard ceiling, spec §3). */
   resourceCeilings: ResourceDraw;
   /**
-   * Maximum total annualized cost the budget can fund ($k). A hard ceiling like
+   * Maximum total annualized cost the budget can fund. A hard ceiling like
    * the resource ceilings — an arrangement whose annualized cost exceeds it is
    * infeasible. Defaults to the status-quo cost (so the current programs exactly
    * fit today's budget); lower it to model funding going down, which can force
@@ -132,9 +138,13 @@ export function interpRange(range: CostRange, fraction: number): number {
 /**
  * Two generically-named vertical programs that share field infrastructure
  * (modeled on an NTD mass-drug-administration + eye-health pairing). Numbers are
- * illustrative $k and chosen so the point estimate favours merging almost
- * everything, while Distribution's wide cost range makes an all-merge bundle
- * fragile — exactly the tension Stage 2 exists to expose.
+ * illustrative dollar figures chosen so the merges trade against one another:
+ * central training buys staff-hours with travel, a shared fleet buys
+ * vehicle-days with coordination and longer deployments, joint supervision buys
+ * field-days with staff-hours and trips. That is what makes the four objectives
+ * land on four different bundles instead of agreeing. Distribution keeps a
+ * deliberately wide cost range — attractive on every objective, fragile under
+ * the downside — so Stage 2 still has a favourite worth warning about.
  */
 export function createExampleScenario(): Scenario {
   const programs: Program[] = [
@@ -145,7 +155,8 @@ export function createExampleScenario(): Scenario {
   const category = (
     id: string,
     name: string,
-    shareable: boolean,
+    canIntegrate: boolean,
+    plannedIntegration: boolean,
     perProgram: Record<ProgramId, ProgramEntry>,
     integratedCost: CostRange,
     transitionCost: CostRange,
@@ -154,12 +165,13 @@ export function createExampleScenario(): Scenario {
   ): Category => ({
     id,
     name,
-    shareable,
-    governmentFunded,
+    canIntegrate,
+    plannedIntegration,
     perProgram,
     integratedCost,
     transitionCost,
     integratedResourceDraw,
+    governmentFunded,
   });
 
   const entry = (
@@ -168,77 +180,71 @@ export function createExampleScenario(): Scenario {
   ): ProgramEntry => ({ standaloneCost, resourceDraw });
 
   const categories: Category[] = [
+    // Central training: far fewer staff-hours, but people travel to it.
     category(
-      "training",
-      "Training",
-      true,
+      "training", "Training", true, true,
       {
-        mda: entry(150, { staffHours: 400, vehicleDays: 20, fieldDays: 30 }),
-        eye: entry(120, { staffHours: 360, vehicleDays: 18, fieldDays: 26 }),
+        mda: entry(150000, { staffHours: 400, vehicleDays: 20, fieldDays: 30 }),
+        eye: entry(120000, { staffHours: 360, vehicleDays: 18, fieldDays: 26 }),
       },
-      { low: 200, point: 210, high: 225 },
-      { low: 110, point: 120, high: 135 },
-      { staffHours: 520, vehicleDays: 26, fieldDays: 40 },
+      { low: 200000, point: 210000, high: 225000 },
+      { low: 110000, point: 120000, high: 135000 },
+      { staffHours: 520, vehicleDays: 40, fieldDays: 60 },
     ),
+    // Shared fleet: many fewer vehicle-days, but more coordination and longer
+    // deployments once routes are consolidated.
     category(
-      "transport",
-      "Transportation",
-      true,
+      "transport", "Transportation", true, false,
       {
-        mda: entry(210, { staffHours: 200, vehicleDays: 120, fieldDays: 60 }),
-        eye: entry(180, { staffHours: 180, vehicleDays: 100, fieldDays: 50 }),
+        mda: entry(210000, { staffHours: 200, vehicleDays: 120, fieldDays: 60 }),
+        eye: entry(180000, { staffHours: 180, vehicleDays: 100, fieldDays: 50 }),
       },
-      { low: 280, point: 300, high: 330 },
-      { low: 80, point: 90, high: 105 },
-      { staffHours: 260, vehicleDays: 150, fieldDays: 80 },
+      { low: 310000, point: 330000, high: 360000 },
+      { low: 80000, point: 90000, high: 105000 },
+      { staffHours: 470, vehicleDays: 140, fieldDays: 125 },
     ),
+    // Deliberately fragile: barely beats standalone at the point estimate and
+    // costs far more at the high end, yet looks good on every objective. This is
+    // the trap Stage 2 exists to spring.
     category(
-      "distribution",
-      "Distribution",
-      true,
+      "distribution", "Distribution", true, false,
       {
-        mda: entry(240, { staffHours: 500, vehicleDays: 80, fieldDays: 90 }),
-        eye: entry(200, { staffHours: 440, vehicleDays: 70, fieldDays: 80 }),
+        mda: entry(240000, { staffHours: 500, vehicleDays: 80, fieldDays: 90 }),
+        eye: entry(200000, { staffHours: 440, vehicleDays: 70, fieldDays: 80 }),
       },
-      // Deliberately risky: merging only barely beats the two standalone
-      // instances (440) at the point estimate, and at the high end costs well
-      // more than them — so merging Distribution is a marginal, fragile bet.
-      { low: 330, point: 375, high: 520 },
-      { low: 150, point: 190, high: 260 },
-      { staffHours: 650, vehicleDays: 100, fieldDays: 120 },
+      { low: 370000, point: 420000, high: 560000 },
+      { low: 150000, point: 190000, high: 260000 },
+      { staffHours: 900, vehicleDays: 140, fieldDays: 120 },
     ),
+    // Joint supervision visits: many fewer field-days, more staff-hours and trips.
     category(
-      "supervision",
-      "Supervision",
-      true,
+      "supervision", "Supervision", true, true,
       {
-        mda: entry(160, { staffHours: 300, vehicleDays: 60, fieldDays: 70 }),
-        eye: entry(140, { staffHours: 270, vehicleDays: 54, fieldDays: 62 }),
+        mda: entry(160000, { staffHours: 300, vehicleDays: 60, fieldDays: 70 }),
+        eye: entry(140000, { staffHours: 270, vehicleDays: 54, fieldDays: 62 }),
       },
-      { low: 195, point: 210, high: 235 },
-      { low: 90, point: 100, high: 115 },
-      { staffHours: 380, vehicleDays: 75, fieldDays: 90 },
+      { low: 270000, point: 290000, high: 320000 },
+      { low: 90000, point: 100000, high: 115000 },
+      { staffHours: 700, vehicleDays: 122, fieldDays: 80 },
     ),
+    // Government funded when merged: leaves the program's books and capacity.
     category(
-      "data",
-      "Data & M&E",
-      true,
+      "data", "Data & M&E", true, false,
       {
-        mda: entry(110, { staffHours: 250, vehicleDays: 10, fieldDays: 20 }),
-        eye: entry(95, { staffHours: 225, vehicleDays: 9, fieldDays: 18 }),
+        mda: entry(110000, { staffHours: 250, vehicleDays: 10, fieldDays: 20 }),
+        eye: entry(95000, { staffHours: 225, vehicleDays: 9, fieldDays: 18 }),
       },
-      { low: 140, point: 150, high: 170 },
-      { low: 70, point: 80, high: 95 },
-      { staffHours: 320, vehicleDays: 12, fieldDays: 25 },
-      true, // when merged, the health system funds Data & M&E (country liability)
+      { low: 140000, point: 150000, high: 170000 },
+      { low: 70000, point: 80000, high: 95000 },
+      { staffHours: 300, vehicleDays: 12, fieldDays: 25 },
+      true,
     ),
+    // Drug-specific: policy forbids merging, whatever the numbers say.
     category(
-      "safety",
-      "Drug safety monitoring",
-      false, // non-negotiable: drug-specific, can never merge (spec §1, §3)
+      "safety", "Drug safety monitoring", false, false,
       {
-        mda: entry(90, { staffHours: 150, vehicleDays: 15, fieldDays: 25 }),
-        eye: entry(70, { staffHours: 120, vehicleDays: 12, fieldDays: 20 }),
+        mda: entry(90000, { staffHours: 150, vehicleDays: 15, fieldDays: 25 }),
+        eye: entry(70000, { staffHours: 120, vehicleDays: 12, fieldDays: 20 }),
       },
       { low: 0, point: 0, high: 0 },
       { low: 0, point: 0, high: 0 },
@@ -258,9 +264,9 @@ export function createExampleScenario(): Scenario {
   );
 
   const constraints: Constraints = {
-    // Comfortably above the all-standalone draw so the status quo is feasible;
-    // merging only ever reduces usage. Tight ceilings are exercised in tests.
-    resourceCeilings: { staffHours: 3800, vehicleDays: 680, fieldDays: 640 },
+    // Field-days bites: the status quo draws 551 against a ceiling of 540, so
+    // doing nothing is not an option and some arrangements are ruled out.
+    resourceCeilings: { staffHours: 3500, vehicleDays: 600, fieldDays: 540 },
     fundingCeiling: statusQuoCost,
     amortizationYears: 5,
     horizonYears: 5,

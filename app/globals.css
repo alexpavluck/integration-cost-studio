@@ -426,7 +426,22 @@ footer {
   border-bottom-color: var(--teal);
 }
 
-.shareable-toggle {
+/* The optimizer disagreeing with the plan is a hint, not an alarm: it sits
+   quietly beside the name so it reads while editing without demanding action. */
+.model-hint {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--mint);
+  border: 1px solid var(--line);
+  color: var(--teal);
+  white-space: nowrap;
+}
+
+.shareable-toggle,
+.plan-toggle {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -439,13 +454,15 @@ footer {
   cursor: pointer;
 }
 
-.shareable-toggle.on {
+.shareable-toggle.on,
+.plan-toggle.on {
   border-color: var(--teal);
   background: var(--mint);
   color: var(--teal-dark);
 }
 
-.shareable-toggle input {
+.shareable-toggle input,
+.plan-toggle input {
   accent-color: var(--teal);
 }
 
@@ -1076,23 +1093,6 @@ footer {
   color: var(--muted);
 }
 
-.inspector-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.inspector-metrics small {
-  display: block;
-  font-size: 10px;
-  color: var(--muted);
-  text-transform: uppercase;
-}
-
-.inspector-metrics strong {
-  font-size: 15px;
-}
-
 .heatmap-legend {
   display: flex;
   gap: 16px;
@@ -1575,3 +1575,33 @@ footer p {
     transition: none !important;
   }
 }
+
+.category-flags { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+.plan-toggle.disabled { opacity: 0.45; cursor: not-allowed; }
+.plan-compare { border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 1.25rem; margin-bottom: 1.5rem; }
+.plan-compare-head h3 { margin: 0 0 0.25rem; }
+.plan-compare-head p { margin: 0 0 1rem; color: var(--muted); }
+.plan-compare-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.plan-col { border: 1px solid var(--line); border-radius: 10px; padding: 0.9rem; }
+.plan-col.highlight { border-color: var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
+.plan-col-title { display: block; font-size: 0.8rem; color: var(--muted); }
+.plan-col-value { display: block; font-size: 1.5rem; margin: 0.2rem 0 0.6rem; }
+.plan-diff { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: 0.4rem; }
+.plan-diff li { display: flex; align-items: baseline; gap: 0.5rem; }
+.plan-diff em { margin-left: auto; font-style: normal; color: var(--muted); }
+.plan-diff .diff-mark { font-weight: 700; width: 1ch; }
+.plan-diff .add .diff-mark { color: var(--teal); }
+.plan-diff .drop .diff-mark { color: var(--warning); }
+.merge-chip.muted { opacity: 0.6; }
+.plan-agree { color: var(--muted); margin: 1rem 0 0; }
+
+.axis-note { color: var(--muted); font-size: 0.85rem; margin: 0.75rem 0 0; max-width: 46ch; }
+.inspector-scenario { margin: 0.35rem 0 0.6rem; color: var(--muted); font-size: 0.85rem; }
+.inspector-payback { margin: 0.5rem 0 0; font-size: 0.88rem; }
+.inspector-working { margin: 0.5rem 0 0; display: grid; gap: 0.35rem; }
+.inspector-working > div { display: flex; justify-content: space-between; gap: 1rem; }
+.inspector-working dt { color: var(--muted); font-size: 0.85rem; }
+.inspector-working dd { margin: 0; font-variant-numeric: tabular-nums; }
+.inspector-working .inspector-total { border-top: 1px solid var(--line); padding-top: 0.35rem; font-weight: 600; }
+.shortfall-note { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 0.85rem; }
+.shortfall-note p { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.88rem; }

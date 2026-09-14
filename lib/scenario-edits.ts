@@ -69,7 +69,9 @@ export function updateCeiling(
 export function updateCategory(
   scenario: Scenario,
   categoryId: string,
-  patch: Partial<Pick<Category, "name" | "shareable" | "governmentFunded">>,
+  patch: Partial<
+    Pick<Category, "name" | "canIntegrate" | "plannedIntegration" | "governmentFunded">
+  >,
 ): Scenario {
   return mapCategory(scenario, categoryId, (category) => ({
     ...category,
@@ -164,7 +166,8 @@ export function addCategory(scenario: Scenario): Scenario {
   const category: Category = {
     id,
     name: "New category",
-    shareable: true,
+    canIntegrate: true,
+    plannedIntegration: false,
     governmentFunded: false,
     perProgram,
     integratedCost: { low: 140, point: 150, high: 170 },
@@ -214,3 +217,22 @@ export function removeProgram(scenario: Scenario, programId: string): Scenario {
 }
 
 export { RESOURCE_TYPES };
+
+/**
+ * Overwrite every category's plan flag from a selection — how "adopt the
+ * optimizer's answer" is applied. Categories outside the selection are planned
+ * out, so adopting is a replacement rather than a merge of two plans.
+ */
+export function setPlannedIntegration(
+  scenario: Scenario,
+  mergedCategoryIds: string[],
+): Scenario {
+  const selected = new Set(mergedCategoryIds);
+  return {
+    ...scenario,
+    categories: scenario.categories.map((category) => ({
+      ...category,
+      plannedIntegration: category.canIntegrate && selected.has(category.id),
+    })),
+  };
+}

@@ -15,6 +15,7 @@ import {
   type ResourceTypeId,
   type Scenario,
 } from "./model.ts";
+import { money } from "./format.ts";
 
 /**
  * Resolves the (possibly uncertainty-scaled) annual integrated cost and one-time
@@ -40,19 +41,31 @@ export type EngineResult = {
   countryAnnualCost: number;
   /** One-time cost to reach this arrangement from all-standalone. */
   transitionCost: number;
-  /** Objective (spec §4): annual cost + amortized transition cost. */
+  /** Total annual cost + amortized transition — the real-efficiency figure. */
   annualizedCost: number;
-  /** Total resource usage across all active instances. */
+  /**
+   * The program's own annualized cost. Government-funded merges are off the
+   * program's books, so this — not `annualizedCost` — is what the funding
+   * ceiling can legitimately test.
+   */
+  programAnnualizedCost: number;
+  /** Resource usage across all active instances (program + country). */
   resourceUsage: ResourceDraw;
-  /** True iff no resource ceiling is breached. */
+  /**
+   * Resource usage the program itself must staff and equip. A government-funded
+   * shared instance draws the country's capacity, not the program's, so resource
+   * ceilings test this.
+   */
+  programResourceUsage: ResourceDraw;
+  /** True iff no ceiling the program is subject to is breached. */
   feasible: boolean;
   /** Human-readable reasons the selection is infeasible (empty when feasible). */
   violations: string[];
 };
 
-/** A category counts as merged only if it is both selected and shareable. */
+/** A category counts as merged only if policy allows it and it is selected. */
 export function isMerged(category: Category, selection: MergeSelection): boolean {
-  return category.shareable && selection.has(category.id);
+  return category.canIntegrate && selection.has(category.id);
 }
 
 function standaloneAnnualCost(category: Category): number {
@@ -85,33 +98,47 @@ export function evaluateSelection(
   let countryAnnualCost = 0;
   let transitionCost = 0;
   let resourceUsage = emptyDraw();
+  let programResourceUsage = emptyDraw();
 
   for (const category of categories) {
     if (isMerged(category, selection)) {
       const integrated = resolver.integrated(category);
-      // Same total either way — government funding only changes who pays.
-      if (category.governmentFunded) countryAnnualCost += integrated;
-      else programAnnualCost += integrated;
-      transitionCost += resolver.transition(category);
       resourceUsage = addDraw(resourceUsage, category.integratedResourceDraw);
+      if (category.governmentFunded) {
+        // Absorbed by the country: off the program's books and off its capacity.
+        countryAnnualCost += integrated;
+      } else {
+        programAnnualCost += integrated;
+        programResourceUsage = addDraw(
+          programResourceUsage,
+          category.integratedResourceDraw,
+        );
+      }
+      // Standing up the merge is work the program does before handing it over,
+      // so transition stays program-borne either way.
+      transitionCost += resolver.transition(category);
     } else {
+      const draw = standaloneResourceDraw(category);
       programAnnualCost += standaloneAnnualCost(category);
-      resourceUsage = addDraw(resourceUsage, standaloneResourceDraw(category));
+      resourceUsage = addDraw(resourceUsage, draw);
+      programResourceUsage = addDraw(programResourceUsage, draw);
     }
   }
 
   const annualCost = programAnnualCost + countryAnnualCost;
-  const annualizedCost =
-    annualCost +
+  const amortize = (annual: number) =>
+    annual +
     (constraints.amortizationYears > 0
       ? transitionCost / constraints.amortizationYears
       : transitionCost);
+  const annualizedCost = amortize(annualCost);
+  const programAnnualizedCost = amortize(programAnnualCost);
 
   const violations: string[] = [];
 
   for (const resource of RESOURCE_TYPES) {
     const id = resource.id as ResourceTypeId;
-    const used = resourceUsage[id];
+    const used = programResourceUsage[id];
     const ceiling = constraints.resourceCeilings[id];
     if (used > ceiling) {
       violations.push(
@@ -120,9 +147,9 @@ export function evaluateSelection(
     }
   }
 
-  if (annualizedCost > constraints.fundingCeiling) {
+  if (programAnnualizedCost > constraints.fundingCeiling) {
     violations.push(
-      `Total funding: $${Math.round(annualizedCost)}k needed exceeds $${Math.round(constraints.fundingCeiling)}k available`,
+      `Total funding: ${money(programAnnualizedCost)} needed exceeds ${money(constraints.fundingCeiling)} available`,
     );
   }
 
@@ -132,7 +159,9 @@ export function evaluateSelection(
     countryAnnualCost,
     transitionCost,
     annualizedCost,
+    programAnnualizedCost,
     resourceUsage,
+    programResourceUsage,
     feasible: violations.length === 0,
     violations,
   };

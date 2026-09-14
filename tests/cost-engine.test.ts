@@ -11,6 +11,7 @@ import type {
   ResourceDraw,
   Scenario,
 } from "../lib/model.ts";
+import { createExampleScenario } from "../lib/model.ts";
 
 const draw = (
   staffHours: number,
@@ -31,7 +32,8 @@ function makeScenario(overrides?: {
   const categoryA: Category = {
     id: "a",
     name: "Category A",
-    shareable: true,
+    canIntegrate: true,
+    plannedIntegration: true,
     governmentFunded: overrides?.governmentFundedA ?? false,
     perProgram: {
       p1: entry(100, draw(10, 1, 1)),
@@ -44,7 +46,8 @@ function makeScenario(overrides?: {
   const categoryB: Category = {
     id: "b",
     name: "Category B",
-    shareable: false, // non-negotiable
+    canIntegrate: false, // non-negotiable
+    plannedIntegration: false,
     governmentFunded: false,
     perProgram: {
       p1: entry(40, draw(5, 0, 1)),
@@ -109,7 +112,7 @@ test("government-funded merges shift cost from program to country, leaving the t
   assert.equal(gov.countryAnnualCost, 150);
 });
 
-test("a non-shareable category is never treated as merged even if selected", () => {
+test("a category that cannot integrate is never treated as merged even if selected", () => {
   const scenario = makeScenario();
   assert.equal(isMerged(scenario.categories[1], new Set(["b"])), false);
   const result = evaluateSelection(scenario, new Set(["b"]));
@@ -142,4 +145,38 @@ test("resource ceiling is a hard constraint; merging reduces usage and can resto
   const merged = evaluateSelection(scenario, new Set(["a"]));
   assert.equal(merged.resourceUsage.staffHours, 23);
   assert.equal(merged.feasible, false);
+});
+
+test("a government-funded merged category leaves the program's budget and capacity", () => {
+  const scenario = createExampleScenario();
+  const gov = scenario.categories.find((c) => c.governmentFunded)!;
+
+  const merged = evaluateSelection(scenario, new Set([gov.id]));
+  const standalone = evaluateSelection(scenario, new Set());
+
+  // Its shared instance costs the program nothing and draws none of its resources.
+  assert.equal(merged.countryAnnualCost, gov.integratedCost.point);
+  assert.ok(merged.programAnnualCost < standalone.programAnnualCost);
+  assert.ok(
+    merged.programResourceUsage.staffHours < standalone.programResourceUsage.staffHours,
+  );
+
+  // The total still counts it — cost-shifting is not efficiency.
+  assert.ok(merged.resourceUsage.staffHours > merged.programResourceUsage.staffHours);
+  assert.equal(
+    merged.annualCost,
+    merged.programAnnualCost + merged.countryAnnualCost,
+  );
+});
+
+test("the funding ceiling tests the program's annualized cost, not the total", () => {
+  const scenario = createExampleScenario();
+  const gov = scenario.categories.find((c) => c.governmentFunded)!;
+  const merged = evaluateSelection(scenario, new Set([gov.id]));
+
+  assert.ok(merged.programAnnualizedCost < merged.annualizedCost);
+  assert.ok(
+    !merged.violations.some((v) => v.startsWith("Total funding")) ||
+      merged.programAnnualizedCost > scenario.constraints.fundingCeiling,
+  );
 });

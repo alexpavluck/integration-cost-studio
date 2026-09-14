@@ -20,7 +20,7 @@ function b64url(obj: unknown): string {
 
 test("encode → decode round-trips a full scenario and objective", () => {
   const state: SharedState = {
-    v: 1,
+    v: 2,
     scenario: createExampleScenario(),
     objective: "staffHours",
   };
@@ -51,4 +51,38 @@ test("buildShareUrl and readStateFromHash compose", () => {
   });
   const decoded = readStateFromHash(url.slice(url.indexOf("#")));
   assert.equal(decoded?.scenario.categories.length, scenario.categories.length);
+});
+
+test("a v1 link decodes with policy and plan both taken from shareable", () => {
+  const scenario = createExampleScenario();
+  const legacy = {
+    v: 1,
+    objective: "cost",
+    scenario: {
+      ...scenario,
+      categories: scenario.categories.map(({ canIntegrate, plannedIntegration, ...rest }) => ({
+        ...rest,
+        shareable: canIntegrate,
+      })),
+    },
+  };
+  const encoded = encodeState(legacy as never);
+  const decoded = decodeState(encoded);
+
+  assert.ok(decoded, "a v1 payload must still decode");
+  assert.equal(decoded!.v, 2);
+  for (const category of decoded!.scenario.categories) {
+    assert.equal(typeof category.canIntegrate, "boolean");
+    assert.equal(category.plannedIntegration, category.canIntegrate);
+  }
+});
+
+test("a v2 link round-trips both flags independently", () => {
+  const scenario = createExampleScenario();
+  scenario.categories[0].plannedIntegration = !scenario.categories[0].plannedIntegration;
+  const decoded = decodeState(encodeState({ v: 2, scenario, objective: "cost" }));
+  assert.deepEqual(
+    decoded!.scenario.categories.map((c) => [c.canIntegrate, c.plannedIntegration]),
+    scenario.categories.map((c) => [c.canIntegrate, c.plannedIntegration]),
+  );
 });

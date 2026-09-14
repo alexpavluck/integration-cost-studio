@@ -1,11 +1,11 @@
-// Stage 2 — robustness / regret analysis over the shortlist.
+// Stage 2 — robustness / worst-case shortfall analysis over the shortlist.
 //
 // For each finalist we sweep a 2D grid: one axis moves every merged category's
 // integrated cost along its entered range (low → point → high), the other moves
 // transition cost the same way. Each cell recomputes net savings and payback, so
 // the trade-off is inspectable instead of hidden in a single point estimate
-// (spec §5). The recommended bundle minimizes regret — it stays good across the
-// whole range rather than being optimal only at the centre.
+// (spec §5). The recommended bundle minimizes worst-case shortfall — it stays
+// good across the whole range rather than being optimal only at the centre.
 
 import { calculatePaybackYears } from "./cost-model.ts";
 import { baselineAnnualCost, evaluateSelection } from "./cost-engine.ts";
@@ -45,19 +45,36 @@ export type RobustnessSummary = {
   worstPaybackYears: number | null;
 };
 
+/**
+ * How far a bundle can fall short of whichever bundle turns out best, measured at
+ * the grid cell where that gap is widest. Carries the provenance — which cell, and
+ * which bundle beat it there — because a recommendation the reader cannot trace is
+ * a recommendation they cannot argue with.
+ */
+export type WorstShortfall = {
+  amount: number;
+  integratedFraction: number;
+  transitionFraction: number;
+  bestBundleId: string;
+  bestNetSavings: number;
+  ownNetSavings: number;
+};
+
 export type BundleRobustness = {
   bundle: Bundle;
   cells: GridCell[];
   summary: RobustnessSummary;
-  /** Max regret vs the best finalist at each cell (lower is more robust). */
-  maxRegret: number;
+  /** Lower is more robust — this is the rule that picks the recommendation. */
+  worstShortfall: WorstShortfall;
 };
 
 export type Stage2Output = {
   grid: GridConfig;
   horizonYears: number;
+  /** All-separate annual cost — the reference every cell's saving is measured against. */
+  baselineAnnualCost: number;
   perBundle: BundleRobustness[];
-  /** Finalist id with the lowest max regret — the robust pick (spec §5 rule). */
+  /** Finalist with the smallest worst-case shortfall — the robust pick. */
   recommendedBundleId: string | null;
   /** Finalist id with the best worst-case net savings (maximin / loss-averse pick). */
   maximinBundleId: string | null;
@@ -135,8 +152,9 @@ function cellKey(cell: GridCell): string {
 
 /**
  * Run Stage 2 over the Stage 1 finalists. All finalists share one grid, so their
- * cells align coordinate-for-coordinate and regret is well defined: at each cell,
- * regret is how far a bundle's net savings falls short of the best finalist there.
+ * cells align coordinate-for-coordinate and the shortfall is well defined: at each
+ * cell, the shortfall is how far a bundle's net savings falls short of the best
+ * finalist there.
  */
 export function runStage2(
   scenario: Scenario,
@@ -151,36 +169,63 @@ export function runStage2(
     cells: computeCells(scenario, bundle, baselineAnnual, grid),
   }));
 
-  // Best net savings achieved by any finalist at each cell coordinate.
-  const bestByCell = new Map<string, number>();
-  for (const { cells } of withCells) {
+  // Best net savings at each cell coordinate, and which finalist achieved it.
+  const bestByCell = new Map<string, { netSavings: number; bundleId: string }>();
+  for (const { bundle, cells } of withCells) {
     for (const cell of cells) {
       const key = cellKey(cell);
       const current = bestByCell.get(key);
-      if (current === undefined || cell.netSavings > current) {
-        bestByCell.set(key, cell.netSavings);
+      if (current === undefined || cell.netSavings > current.netSavings) {
+        bestByCell.set(key, { netSavings: cell.netSavings, bundleId: bundle.id });
       }
     }
   }
 
   const perBundle: BundleRobustness[] = withCells.map(({ bundle, cells }) => {
-    const maxRegret = cells.reduce((worst, cell) => {
-      const best = bestByCell.get(cellKey(cell)) ?? cell.netSavings;
-      return Math.max(worst, best - cell.netSavings);
-    }, 0);
-    return { bundle, cells, summary: summarize(cells), maxRegret };
+    let worstShortfall: WorstShortfall = {
+      amount: -Infinity,
+      integratedFraction: 0,
+      transitionFraction: 0,
+      bestBundleId: bundle.id,
+      bestNetSavings: 0,
+      ownNetSavings: 0,
+    };
+    for (const cell of cells) {
+      const best = bestByCell.get(cellKey(cell)) ?? {
+        netSavings: cell.netSavings,
+        bundleId: bundle.id,
+      };
+      const amount = best.netSavings - cell.netSavings;
+      if (amount > worstShortfall.amount) {
+        worstShortfall = {
+          amount,
+          integratedFraction: cell.integratedFraction,
+          transitionFraction: cell.transitionFraction,
+          bestBundleId: best.bundleId,
+          bestNetSavings: best.netSavings,
+          ownNetSavings: cell.netSavings,
+        };
+      }
+    }
+    // An empty grid never entered the loop above, so the -Infinity sentinel
+    // would otherwise escape and, being less than every real value, make this
+    // bundle win the recommendation unconditionally.
+    if (cells.length === 0) {
+      worstShortfall = { ...worstShortfall, amount: 0 };
+    }
+    return { bundle, cells, summary: summarize(cells), worstShortfall };
   });
 
   const recommendedBundleId =
     perBundle.length === 0
       ? null
       : perBundle.reduce((best, current) =>
-          current.maxRegret < best.maxRegret ? current : best,
+          current.worstShortfall.amount < best.worstShortfall.amount ? current : best,
         ).bundle.id;
 
   // Maximin: the bundle whose worst-case cell is least bad. This can differ from
-  // the min-regret pick — a genuine tension the decision view surfaces rather
-  // than hides.
+  // the smallest-worst-shortfall pick — a genuine tension the decision view
+  // surfaces rather than hides.
   const maximinBundleId =
     perBundle.length === 0
       ? null
@@ -204,6 +249,7 @@ export function runStage2(
   return {
     grid,
     horizonYears,
+    baselineAnnualCost: baselineAnnual,
     perBundle,
     recommendedBundleId,
     maximinBundleId,

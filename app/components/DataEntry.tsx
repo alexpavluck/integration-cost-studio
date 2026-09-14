@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { RESOURCE_TYPES, type Scenario } from "../../lib/model.ts";
+import type { PlanComparison } from "../../lib/optimizer.ts";
 import { money } from "../../lib/format.ts";
 import {
   addCategory,
@@ -20,14 +21,23 @@ import { NumberInput, TextInput } from "./ui.tsx";
 export function DataEntry({
   scenario,
   setScenario,
+  comparison,
   middleSlot,
 }: {
   scenario: Scenario;
   setScenario: (next: Scenario) => void;
+  /**
+   * The optimizer's view of the current plan. Surfaced here so its disagreement
+   * with the user is visible while they are still editing inputs, rather than
+   * only after they walk to the analysis step.
+   */
+  comparison: PlanComparison;
   /** Rendered between the programs card and the component categories. */
   middleSlot?: ReactNode;
 }) {
   const { programs, categories } = scenario;
+  const wouldAdd = new Set(comparison.add.map((change) => change.id));
+  const wouldDrop = new Set(comparison.drop.map((change) => change.id));
 
   return (
     <div className="screen">
@@ -97,16 +107,46 @@ export function DataEntry({
                   value={category.name}
                   onChange={(value) => setScenario(updateCategory(scenario, category.id, { name: value }))}
                 />
-                <label className={`shareable-toggle${category.shareable ? " on" : ""}`}>
-                  <input
-                    type="checkbox"
-                    checked={category.shareable}
-                    onChange={(event) =>
-                      setScenario(updateCategory(scenario, category.id, { shareable: event.target.checked }))
-                    }
-                  />
-                  <span>{category.shareable ? "Integrated" : "Remain separate"}</span>
-                </label>
+                {wouldAdd.has(category.id) ? (
+                  <span className="model-hint">model suggests integrating</span>
+                ) : null}
+                {wouldDrop.has(category.id) ? (
+                  <span className="model-hint">model suggests keeping separate</span>
+                ) : null}
+                <div className="category-flags">
+                  <label className={`shareable-toggle${category.canIntegrate ? " on" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={category.canIntegrate}
+                      onChange={(event) =>
+                        setScenario(
+                          updateCategory(scenario, category.id, {
+                            canIntegrate: event.target.checked,
+                            plannedIntegration: event.target.checked && category.plannedIntegration,
+                          }),
+                        )
+                      }
+                    />
+                    <span>{category.canIntegrate ? "Can be integrated" : "Never integrate"}</span>
+                  </label>
+                  <label
+                    className={`plan-toggle${category.plannedIntegration ? " on" : ""}${category.canIntegrate ? "" : " disabled"}`}
+                  >
+                    <input
+                      type="checkbox"
+                      disabled={!category.canIntegrate}
+                      checked={category.plannedIntegration}
+                      onChange={(event) =>
+                        setScenario(
+                          updateCategory(scenario, category.id, {
+                            plannedIntegration: event.target.checked,
+                          }),
+                        )
+                      }
+                    />
+                    <span>In my plan</span>
+                  </label>
+                </div>
                 {categories.length > 1 ? (
                   <button
                     className="remove-button"
@@ -124,7 +164,7 @@ export function DataEntry({
                   <thead>
                     <tr>
                       <th scope="col">Program</th>
-                      <th scope="col">Standalone $k/yr</th>
+                      <th scope="col">Standalone $/yr</th>
                       {RESOURCE_TYPES.map((resource) => (
                         <th scope="col" key={resource.id}>
                           {resource.label}
@@ -143,7 +183,7 @@ export function DataEntry({
                             <NumberInput
                               ariaLabel={`Standalone cost for ${category.name}, ${program.name}`}
                               prefix="$"
-                              step={10}
+                              step={1000}
                               value={entry.standaloneCost}
                               onChange={(value) => setScenario(updateEntry(scenario, category.id, program.id, { standaloneCost: value }))}
                             />
@@ -164,7 +204,7 @@ export function DataEntry({
                 </table>
               </div>
 
-              {category.shareable ? (
+              {category.canIntegrate ? (
                 <div className="merged-estimates">
                   <p className="merged-lead">
                     If merged into one shared instance (combined standalone today:{" "}
@@ -190,7 +230,7 @@ export function DataEntry({
                   </label>
                   <div className="range-row">
                     <RangeField
-                      label="Integrated cost $k/yr"
+                      label="Integrated cost $/yr"
                       category={category.id}
                       rangeKey="integratedCost"
                       values={category.integratedCost}
@@ -198,7 +238,7 @@ export function DataEntry({
                       setScenario={setScenario}
                     />
                     <RangeField
-                      label="Transition cost $k (one-time)"
+                      label="Transition cost (one-time)"
                       category={category.id}
                       rangeKey="transitionCost"
                       values={category.transitionCost}

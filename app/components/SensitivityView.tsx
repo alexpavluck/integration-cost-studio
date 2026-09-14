@@ -29,7 +29,7 @@ export function SensitivityView({
       <div className="screen">
         <div className="screen-head">
           <p className="step step-continued">Stage 2</p>
-          <h2>Robustness &amp; sensitivity</h2>
+          <h2>What if the costs are wrong?</h2>
           <p className="screen-lead">No finalists to analyze. Adjust inputs in earlier steps.</p>
         </div>
       </div>
@@ -59,12 +59,13 @@ export function SensitivityView({
     <div className="screen">
       <div className="screen-head">
         <p className="step step-continued">Stage 2</p>
-        <h2>Robustness &amp; sensitivity</h2>
+        <h2>What if the costs are wrong?</h2>
         <p className="screen-lead">
-          Each cell re-solves a finalist with its uncertain costs shifted along
-          the entered ranges. Green cells net a saving over the {stage2.horizonYears}
-          -year horizon; red cells lose money. A bundle that stays green across the
-          whole grid is robust; one that is only green near the centre is fragile.
+          Every cost below is an estimate, so each cell re-solves this option with
+          its costs shifted along the low-to-high range you entered. Green cells
+          still save money over {stage2.horizonYears} years; red cells lose it. An
+          option that stays green everywhere is a safe bet; one that is green only
+          near the middle depends on your estimates being right.
         </p>
       </div>
 
@@ -108,43 +109,84 @@ export function SensitivityView({
             ))}
           </div>
           <div className="axis-label axis-x">Transition cost →</div>
+          <p className="axis-note">
+            A position on either axis moves every merged category along{" "}
+            <em>its own</em> entered low-to-high range — so &ldquo;High +50%&rdquo; shifts a
+            category with a wide range much further than one with a narrow range.
+            The centre cell is every cost at your best estimate.
+          </p>
         </div>
 
         <aside className="sensitivity-side">
           <div className="side-summary">
             <h3>{selected.bundle.label}</h3>
-            <SummaryRow label="Positive cells" value={pct(selected.summary.sharePositive)} tone={selected.summary.sharePositive === 1 ? "pos" : selected.summary.sharePositive >= 0.5 ? "warn" : "neg"} />
-            <SummaryRow label="Centre (point)" value={signedMoney(selected.summary.centerNetSavings)} tone={selected.summary.centerNetSavings >= 0 ? "pos" : "neg"} />
-            <SummaryRow label="Worst case" value={signedMoney(selected.summary.worstNetSavings)} tone={selected.summary.worstNetSavings >= 0 ? "pos" : "neg"} />
-            <SummaryRow label="Best case" value={signedMoney(selected.summary.bestNetSavings)} tone="pos" />
-            <SummaryRow label="Worst payback" value={paybackLabel(selected.summary.worstPaybackYears)} tone="neutral" />
-            <SummaryRow label="Max regret" value={money(selected.maxRegret)} tone="neutral" />
+            <SummaryRow label="Scenarios that still save money" value={pct(selected.summary.sharePositive)} tone={selected.summary.sharePositive === 1 ? "pos" : selected.summary.sharePositive >= 0.5 ? "warn" : "neg"} />
+            <SummaryRow label="At your best estimates" value={signedMoney(selected.summary.centerNetSavings)} tone={selected.summary.centerNetSavings >= 0 ? "pos" : "neg"} />
+            <SummaryRow label="Worst scenario" value={signedMoney(selected.summary.worstNetSavings)} tone={selected.summary.worstNetSavings >= 0 ? "pos" : "neg"} />
+            <SummaryRow label="Best scenario" value={signedMoney(selected.summary.bestNetSavings)} tone="pos" />
+            <SummaryRow label="Slowest payback" value={paybackLabel(selected.summary.worstPaybackYears)} tone="neutral" />
+            <SummaryRow
+              label="Worst shortfall vs. the best option"
+              value={money(selected.worstShortfall.amount)}
+              tone="neutral"
+            />
+          </div>
+
+          <div className="shortfall-note">
+            <span className="inspector-title">Where the shortfall comes from</span>
+            <p>
+              At {fractionLabel(selected.worstShortfall.integratedFraction)} integrated cost
+              and {fractionLabel(selected.worstShortfall.transitionFraction)} transition cost,
+              this option nets {signedMoney(selected.worstShortfall.ownNetSavings)} while{" "}
+              <strong>
+                {stage2.perBundle.find((e) => e.bundle.id === selected.worstShortfall.bestBundleId)
+                  ?.bundle.label ?? "another option"}
+              </strong>{" "}
+              nets {signedMoney(selected.worstShortfall.bestNetSavings)} — a gap of{" "}
+              {money(selected.worstShortfall.amount)}. That is the widest this option
+              ever falls behind, which is why it is the number we rank on.
+            </p>
           </div>
 
           <div className="cell-inspector">
             <span className="inspector-title">Selected cell</span>
             {activeCell ? (
               <>
-                <p>
+                <p className="inspector-scenario">
                   Integrated {fractionLabel(activeCell.integratedFraction)} · Transition{" "}
                   {fractionLabel(activeCell.transitionFraction)}
                 </p>
-                <div className="inspector-metrics">
+                <dl className="inspector-working">
                   <div>
-                    <small>Net savings</small>
-                    <strong className={activeCell.netSavings >= 0 ? "pos" : "neg"}>
+                    <dt>Total annual cost, this scenario</dt>
+                    <dd>{money(activeCell.annualCost)}/yr</dd>
+                  </div>
+                  <div>
+                    <dt>Annual saving vs. all separate</dt>
+                    <dd>{signedMoney(stage2.baselineAnnualCost - activeCell.annualCost)}/yr</dd>
+                  </div>
+                  <div>
+                    <dt>Over {stage2.horizonYears} years</dt>
+                    <dd>
+                      {signedMoney(
+                        (stage2.baselineAnnualCost - activeCell.annualCost) * stage2.horizonYears,
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Less one-off transition cost</dt>
+                    <dd>{signedMoney(-activeCell.transitionCost)}</dd>
+                  </div>
+                  <div className="inspector-total">
+                    <dt>Net over {stage2.horizonYears} years</dt>
+                    <dd className={activeCell.netSavings >= 0 ? "pos" : "neg"}>
                       {signedMoney(activeCell.netSavings)}
-                    </strong>
+                    </dd>
                   </div>
-                  <div>
-                    <small>Payback</small>
-                    <strong>{paybackLabel(activeCell.paybackYears)}</strong>
-                  </div>
-                  <div>
-                    <small>Annual cost</small>
-                    <strong>{money(activeCell.annualCost)}</strong>
-                  </div>
-                </div>
+                </dl>
+                <p className="inspector-payback">
+                  Payback in this scenario: <strong>{paybackLabel(activeCell.paybackYears)}</strong>
+                </p>
               </>
             ) : (
               <p className="inspector-empty">Click a cell to inspect its net savings and payback.</p>

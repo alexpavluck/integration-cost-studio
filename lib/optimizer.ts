@@ -1,13 +1,13 @@
 // Stage 1 — shortlisting optimizer.
 //
-// Cost is the SOLE objective (spec §3/§4). Resource ceilings and non-negotiable
-// (non-shareable) categories are hard constraints — never folded into a weighted
+// Cost is the SOLE objective (spec §3/§4). Resource ceilings and categories
+// policy forbids integrating are hard constraints — never folded into a weighted
 // score. The output is a shortlist of "plausible finalists," not a
 // recommendation; the robust choice among them is decided in Stage 2
 // (lib/robustness.ts).
 //
-// Because the decision is one binary per shareable category, the whole space is
-// 2^k selections for k shareable categories. At realistic scale (k ≲ 10) that is
+// Because the decision is one binary per integrable category, the whole space is
+// 2^k selections for k integrable categories. At realistic scale (k ≲ 10) that is
 // ≤1024 evaluations — instant to brute-force and fully transparent, so no MIP
 // solver is needed.
 
@@ -17,7 +17,12 @@ import {
   evaluateSelection,
   type EngineResult,
 } from "./cost-engine.ts";
-import type { Scenario } from "./model.ts";
+import {
+  RESOURCE_TYPES,
+  emptyDraw,
+  type ResourceDraw,
+  type Scenario,
+} from "./model.ts";
 
 /**
  * What the shortlist minimizes. Cost is the classic objective, but a program
@@ -26,7 +31,7 @@ import type { Scenario } from "./model.ts";
  * funding envelope remain hard constraints — only the ranking metric changes.
  */
 export const OBJECTIVES = [
-  { id: "cost", label: "Cost", unit: "$k annualized" },
+  { id: "cost", label: "Cost", unit: "$ annualized" },
   { id: "staffHours", label: "Staff-hours", unit: "hrs/yr" },
   { id: "vehicleDays", label: "Vehicle-days", unit: "veh-days/yr" },
   { id: "fieldDays", label: "Field-days", unit: "field-days/yr" },
@@ -34,11 +39,15 @@ export const OBJECTIVES = [
 
 export type Objective = (typeof OBJECTIVES)[number]["id"];
 
-/** The value a given objective minimizes for an evaluated arrangement. */
+/**
+ * The value a given objective minimizes. These are the program's own figures,
+ * matching what the ceilings constrain — optimizing a total while capping a
+ * program figure would recommend arrangements the constraints then reject.
+ */
 export function objectiveValue(result: EngineResult, objective: Objective): number {
   return objective === "cost"
-    ? result.annualizedCost
-    : result.resourceUsage[objective];
+    ? result.programAnnualizedCost
+    : result.programResourceUsage[objective];
 }
 
 export type Bundle = {
@@ -74,6 +83,17 @@ export type Stage1Output = {
   infeasibleCount: number;
   /** Every feasible bundle ranked by annualized cost (baseline included). */
   ranked: Bundle[];
+  /** The arrangement implied by the user's `plannedIntegration` flags. */
+  userPlan: Bundle;
+  /**
+   * The lowest each figure reaches across every arrangement, feasible or not.
+   * Someone setting a ceiling needs to know what is physically reachable, so this
+   * deliberately ignores the other ceilings — otherwise a tight ceiling would hide
+   * the very arrangements that justify relaxing it.
+   */
+  leanest: { programAnnualizedCost: number; programResourceUsage: ResourceDraw };
+  /** The objective `finalists` were ranked on, so consumers cannot pair this output with a different one. */
+  objective: Objective;
 };
 
 function subsets<T>(items: T[]): T[][] {
@@ -128,7 +148,7 @@ function toBundle(
 }
 
 /**
- * Enumerate every merge selection over the shareable categories, keep the
+ * Enumerate every merge selection over the integrable categories, keep the
  * feasible ones, and return the all-standalone baseline plus the top
  * `finalistCount` feasible merge bundles by the chosen objective. Ties break on
  * annualized cost so the ordering is stable and cost-sensible.
@@ -139,11 +159,11 @@ export function runStage1(
   finalistCount = 3,
 ): Stage1Output {
   const baselineAnnual = baselineAnnualCost(scenario);
-  const shareableIds = scenario.categories
-    .filter((category) => category.shareable)
+  const candidateIds = scenario.categories
+    .filter((category) => category.canIntegrate)
     .map((category) => category.id);
 
-  const allBundles = subsets(shareableIds).map((mergedIds) =>
+  const allBundles = subsets(candidateIds).map((mergedIds) =>
     toBundle(scenario, mergedIds, baselineAnnual),
   );
 
@@ -165,11 +185,120 @@ export function runStage1(
     .filter((bundle) => bundle.mergedCategoryIds.length > 0)
     .slice(0, finalistCount);
 
+  // Reduced over every arrangement rather than assuming all-merged is leanest:
+  // merges now trade resources against each other, so the minimum on one figure
+  // can sit in a different bundle from the minimum on another.
+  const leanestUsage = emptyDraw();
+  let leanestCost = Number.POSITIVE_INFINITY;
+  for (const resource of RESOURCE_TYPES) {
+    leanestUsage[resource.id] = Number.POSITIVE_INFINITY;
+  }
+  for (const bundle of allBundles) {
+    leanestCost = Math.min(leanestCost, bundle.result.programAnnualizedCost);
+    for (const resource of RESOURCE_TYPES) {
+      leanestUsage[resource.id] = Math.min(
+        leanestUsage[resource.id],
+        bundle.result.programResourceUsage[resource.id],
+      );
+    }
+  }
+  const leanest = {
+    programAnnualizedCost: leanestCost,
+    programResourceUsage: leanestUsage,
+  };
+
+  const plannedIds = scenario.categories
+    .filter((category) => category.canIntegrate && category.plannedIntegration)
+    .map((category) => category.id);
+  const userPlan =
+    allBundles.find((bundle) => bundle.id === bundleId(plannedIds)) ??
+    toBundle(scenario, plannedIds, baselineAnnual);
+
   return {
     baseline,
     finalists,
     feasibleCount: feasible.length,
     infeasibleCount,
     ranked,
+    userPlan,
+    leanest,
+    objective,
+  };
+}
+
+export type PlanChange = {
+  id: string;
+  name: string;
+  /**
+   * Marginal effect on the active objective of applying this single change to
+   * the user's plan — negative is an improvement. Measured one change at a time
+   * because that is the question a reader actually asks of each row.
+   */
+  objectiveDelta: number;
+};
+
+export type PlanComparison = {
+  userPlan: Bundle;
+  /** Top finalist on the active objective; null when nothing feasible merges. */
+  best: Bundle | null;
+  add: PlanChange[];
+  drop: PlanChange[];
+  /** best − userPlan on the active objective. Negative ⇒ the optimum is better. */
+  objectiveDelta: number;
+};
+
+/**
+ * Contrast the user's proposal with the best feasible arrangement, itemizing the
+ * categories the optimizer would add or drop. This is the payoff of separating
+ * policy from plan: without it the tool can only score what the user already
+ * thought of.
+ */
+export function comparePlanToBest(
+  scenario: Scenario,
+  stage1: Stage1Output,
+): PlanComparison {
+  const objective = stage1.objective;
+  const { userPlan } = stage1;
+  const best = stage1.finalists[0] ?? null;
+  const nameOf = (id: string) =>
+    scenario.categories.find((category) => category.id === id)?.name ?? id;
+
+  if (!best) {
+    return { userPlan, best: null, add: [], drop: [], objectiveDelta: 0 };
+  }
+
+  const baselineAnnual = baselineAnnualCost(scenario);
+  const planned = new Set(userPlan.mergedCategoryIds);
+  const chosen = new Set(best.mergedCategoryIds);
+  const planValue = objectiveValue(userPlan.result, objective);
+
+  const marginal = (id: string, next: Set<string>): PlanChange => ({
+    id,
+    name: nameOf(id),
+    objectiveDelta:
+      objectiveValue(
+        toBundle(scenario, [...next], baselineAnnual).result,
+        objective,
+      ) - planValue,
+  });
+
+  const add = best.mergedCategoryIds
+    .filter((id) => !planned.has(id))
+    .map((id) => marginal(id, new Set([...planned, id])));
+
+  const drop = userPlan.mergedCategoryIds
+    .filter((id) => !chosen.has(id))
+    .map((id) => {
+      const next = new Set(planned);
+      next.delete(id);
+      return marginal(id, next);
+    });
+
+  return {
+    userPlan,
+    best,
+    add,
+    drop,
+    objectiveDelta: objectiveValue(best.result, objective) - planValue,
   };
 }

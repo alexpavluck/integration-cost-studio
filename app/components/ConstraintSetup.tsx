@@ -17,11 +17,11 @@ export function ConstraintSetup({
   setScenario: (next: Scenario) => void;
   /** Resource draw of the all-standalone status quo. */
   baselineUsage: ResourceDraw;
-  /** Resource draw of the leanest (all-shareable-merged) arrangement. */
+  /** The lowest draw any arrangement reaches — not necessarily the all-merged one. */
   leanestUsage: ResourceDraw;
   /** Annualized cost of the status quo (its default funding envelope). */
   statusQuoCost: number;
-  /** Annualized cost of the leanest arrangement. */
+  /** The lowest annualized cost any arrangement reaches. */
   leanestCost: number;
 }) {
   const { constraints } = scenario;
@@ -40,10 +40,10 @@ export function ConstraintSetup({
           <div className="ceiling-row funding-row">
             <div className="ceiling-label">
               <strong>Total funding</strong>
-              <span>$k/yr available</span>
+              <span>per year available</span>
             </div>
             <NumberInput
-              ariaLabel="Total funding ceiling in thousands per year"
+              ariaLabel="Total funding ceiling per year"
               prefix="$"
               step={50}
               value={funding}

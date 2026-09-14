@@ -1,15 +1,15 @@
-// Presentation helpers shared across the screens. Costs are entered and stored
-// in $k; large figures collapse to $m for readability.
+// Presentation helpers shared across the screens. Costs are entered, stored and
+// displayed as actual values; very large figures collapse to $m for readability.
 
 export function money(value: number, compact = false): string {
   const rounded = Math.round(value);
-  if (compact && Math.abs(rounded) >= 1000) {
-    return `$${(rounded / 1000).toFixed(1).replace(".0", "")}m`;
+  if (compact && Math.abs(rounded) >= 1_000_000) {
+    return `$${(rounded / 1_000_000).toFixed(1).replace(".0", "")}m`;
   }
-  return `$${rounded.toLocaleString()}k`;
+  return `$${rounded.toLocaleString()}`;
 }
 
-/** Signed money, e.g. "+$120k" / "−$40k" (true minus sign, not a hyphen). */
+/** Signed money, e.g. "+$120,000" / "−$40,000" (true minus sign, not a hyphen). */
 export function signedMoney(value: number, compact = false): string {
   const sign = value >= 0 ? "+" : "−";
   return `${sign}${money(Math.abs(value), compact)}`;
