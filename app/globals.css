@@ -1595,7 +1595,15 @@ footer p {
 .merge-chip.muted { opacity: 0.6; }
 .plan-agree { color: var(--muted); margin: 1rem 0 0; }
 
-.axis-note { color: var(--muted); font-size: 0.85rem; margin: 0.75rem 0 0; max-width: 46ch; }
+/* Sits in the heatmap's grid, so it must claim the wide column explicitly — auto-placement
+   drops it into the 18px axis-label column and renders it one word per line. */
+.axis-note {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.75rem 0 0;
+  max-width: 46ch;
+}
 .inspector-scenario { margin: 0.35rem 0 0.6rem; color: var(--muted); font-size: 0.85rem; }
 .inspector-payback { margin: 0.5rem 0 0; font-size: 0.88rem; }
 .inspector-working { margin: 0.5rem 0 0; display: grid; gap: 0.35rem; }
