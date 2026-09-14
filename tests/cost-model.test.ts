@@ -12,6 +12,7 @@ import {
   rankMergeCandidates,
   verticalCostForDimension,
   type Dimension,
+  buildPaybackSeries,
 } from "../lib/cost-model.ts";
 
 const dimensions: Dimension[] = [
@@ -204,4 +205,47 @@ test("ranks merge candidates by fastest hypothetical payback, independent of cur
   assert.equal(ranked[0].paybackYears, 15 / 150);
   assert.equal(ranked[1].paybackYears, 100 / 20);
   assert.equal(ranked[2].paybackYears, null);
+});
+
+test("both payback lines start where the money actually starts", () => {
+  const series = buildPaybackSeries(1_000_000, 800_000, 400_000, 5);
+  const first = series.points[0];
+  assert.equal(first.year, 0);
+  assert.equal(first.statusQuo, 0, "staying separate has spent nothing at year 0");
+  assert.equal(first.integrated, 400_000, "integrating has already paid the transition");
+});
+
+test("the crossover is exactly the payback figure shown beside the chart", () => {
+  const baseline = 1_000_000;
+  const integrated = 800_000;
+  const transition = 400_000;
+  const series = buildPaybackSeries(baseline, integrated, transition, 5);
+  assert.equal(
+    series.crossoverYear,
+    calculatePaybackYears(transition, baseline - integrated),
+  );
+  assert.equal(series.crossoverYear, 2);
+});
+
+test("lines that never cross report no crossover", () => {
+  // Integration costs MORE to run, so it never catches up.
+  const series = buildPaybackSeries(1_000_000, 1_100_000, 300_000, 5);
+  assert.equal(series.crossoverYear, null);
+  for (const point of series.points) {
+    assert.ok(point.integrated > point.statusQuo || point.year === 0);
+  }
+});
+
+test("the x axis stretches past the horizon to keep the crossover on screen", () => {
+  // Payback at 8 years against a 5-year horizon.
+  const series = buildPaybackSeries(1_000_000, 900_000, 800_000, 5);
+  assert.equal(series.crossoverYear, 8);
+  assert.ok(series.maxYear >= 9, `expected the axis past year 8, got ${series.maxYear}`);
+  assert.equal(series.points.at(-1)!.year, series.maxYear);
+});
+
+test("a payback beyond the plot ceiling is reported as no crossover rather than drawn off-screen", () => {
+  const series = buildPaybackSeries(1_000_000, 990_000, 900_000, 5);
+  assert.ok(series.maxYear <= 15);
+  assert.equal(series.crossoverYear, null);
 });

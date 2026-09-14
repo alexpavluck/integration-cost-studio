@@ -9,6 +9,7 @@ import {
   type Stage1Output,
 } from "../../lib/optimizer.ts";
 import { RESOURCE_TYPES, type Scenario } from "../../lib/model.ts";
+import { PaybackChart } from "./PaybackChart.tsx";
 
 export function Stage1Results({
   scenario,
@@ -32,6 +33,8 @@ export function Stage1Results({
   // Stage 2 defaults to the first finalist when nothing is picked, so the cards
   // must show that same default or the two screens disagree about what is selected.
   const activeFinalistId = selectedFinalistId ?? stage1.finalists[0]?.id ?? null;
+  const selectedBundle =
+    stage1.finalists.find((bundle) => bundle.id === activeFinalistId) ?? null;
   const nameOf = (id: string) =>
     scenario.categories.find((c) => c.id === id)?.name ?? id;
   const objectiveLabel =
@@ -142,6 +145,14 @@ export function Stage1Results({
           />
         ))}
       </div>
+
+      {selectedBundle ? (
+        <PaybackChart
+          bundle={selectedBundle}
+          baselineAnnualCost={stage1.baseline.result.annualCost}
+          horizonYears={scenario.constraints.horizonYears}
+        />
+      ) : null}
     </div>
   );
 }
