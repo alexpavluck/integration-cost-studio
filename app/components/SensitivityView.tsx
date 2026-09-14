@@ -152,6 +152,10 @@ export function SensitivityView({
             <span className="inspector-title">Selected cell</span>
             {activeCell ? (
               <>
+                <p className="inspector-scenario">
+                  Integrated {fractionLabel(activeCell.integratedFraction)} · Transition{" "}
+                  {fractionLabel(activeCell.transitionFraction)}
+                </p>
                 <dl className="inspector-working">
                   <div>
                     <dt>Shared-service cost, this scenario</dt>
@@ -171,7 +175,7 @@ export function SensitivityView({
                   </div>
                   <div>
                     <dt>Less one-off transition cost</dt>
-                    <dd>−{money(activeCell.transitionCost)}</dd>
+                    <dd>{signedMoney(-activeCell.transitionCost)}</dd>
                   </div>
                   <div className="inspector-total">
                     <dt>Net over {stage2.horizonYears} years</dt>
@@ -180,6 +184,9 @@ export function SensitivityView({
                     </dd>
                   </div>
                 </dl>
+                <p className="inspector-payback">
+                  Payback in this scenario: <strong>{paybackLabel(activeCell.paybackYears)}</strong>
+                </p>
               </>
             ) : (
               <p className="inspector-empty">Click a cell to inspect its net savings and payback.</p>
